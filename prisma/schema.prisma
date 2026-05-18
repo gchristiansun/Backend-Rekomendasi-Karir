@@ -3,5 +3,26 @@ generator client {
 }
 
 datasource db {
-    provider = "postgresql"    
+    provider = "mysql"    
+    url      = env("DATABASE_URL")
+}
+
+model user {
+  id            String         @id @default(ulid())
+  email         String         @unique(map: "email") @db.VarChar(255)
+  name          String?        @db.VarChar(255)
+  phone         String?        @db.VarChar(30)
+  password      String?        @db.Text
+  role          user_role?
+  created_at    DateTime       @default(now()) @db.DateTime(0)
+  updated_at    DateTime       @updatedAt @db.DateTime(0)
+  refresh_token String?        @db.Text
+  @@unique([refresh_token(length: 191)], map: "refresh_token")
+}
+
+enum user_role {
+    user
+    company
+    admin
+    educational_institution
 }

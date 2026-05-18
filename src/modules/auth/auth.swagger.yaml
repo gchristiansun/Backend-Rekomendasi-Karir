@@ -1,0 +1,86 @@
+tags:
+  - name: AUTH
+    description: API untuk autentikasi pengguna
+
+# Regiter
+/api/auth/register:
+  post:
+    summary: REGISTER
+    tags:
+      - AUTH
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - name
+              - email
+              - password
+            properties:
+              name:
+                type: string
+              email:
+                type: string
+              password:
+                type: string
+    responses:
+      201:
+        description: Create user berhasil
+      409:
+        description: Email already exists
+
+# Login
+/api/auth/login:
+  post:
+    summary: LOGIN
+    tags:
+      - AUTH
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - email
+              - password
+            properties:
+              email:
+                type: string
+              password:
+                type: string
+    responses:
+      200:
+        description: Login successfully
+      401:
+        description: Invalid email or password
+      404:
+        description: User not found
+
+# Logout
+/api/auth/logout:
+  post:
+    summary: LOGOUT
+    tags:
+      - AUTH
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Logout successfully
+
+# Refresh token
+/api/auth/refresh-token:
+  post:
+    summary: REFRESH TOKEN
+    tags:
+      - AUTH
+    responses:
+      200:
+        description: Token refreshed successfully
+      401:
+        description: No refresh token rovided
+      403:
+        description: Invalid or expired resfresh token
