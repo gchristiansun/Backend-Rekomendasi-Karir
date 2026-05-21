@@ -44,8 +44,6 @@ ACCESS_TOKEN_SECRET=xxxxxxxxxxxxxxxxxxxx
 REFRESH_TOKEN_SECRET=xxxxxxxxxxxxxxxxxxxx
 ACCESS_TOKEN_EXPIRES_IN= (minute)
 REFRESH_TOKEN_EXPIRES_IN= (days)
-MIDTRANS_SERVER_KEY=xxxxxxxxxxxxxxxxxxxx
-MIDTRANS_CLIENT_KEY=xxxxxxxxxxxxxxxxxxxx
 ```
 
 ## Database Migration
