@@ -5,8 +5,8 @@ import { RegisterUserInput } from './auth.validation';
 
 // Cek keberadaan email
 export const findUserByEmail = async (email: string) => {
-    return await prisma.user.findUnique({
-        where: {email},
+    return await prisma.users.findUnique({
+        where: { email },
     })
 }
 
@@ -14,12 +14,13 @@ export const findUserByEmail = async (email: string) => {
 export const createUser = async (input: RegisterUserInput) => {
     const hashedPassword = await hashPassword(input.password);
 
-    const user = await prisma.user.create({
+    const user = await prisma.users.create({
         data: {
-            name: input.name,
+            // name: input.name,
             email: input.email,
             password: hashedPassword,
-            // role: user_role.customer,
+            role: input.role,
+            // created_at: 
         }
     })
     return user;
@@ -27,7 +28,7 @@ export const createUser = async (input: RegisterUserInput) => {
 
 // Simpan refresh token
 export const saveRefreshToken = async (userId: string, refreshToken: string) => {
-    return await prisma.user.update({
+    return await prisma.users.update({
         where: { id: userId },
         data: {
             refresh_token: refreshToken,
@@ -37,7 +38,7 @@ export const saveRefreshToken = async (userId: string, refreshToken: string) => 
 
 // Hapus refresh token ketika logout
 export const clearRefreshToken = async (token: string) => {
-    return await prisma.user.update({
+    return await prisma.users.update({
         where: { refresh_token: token },
         data:{
             refresh_token: null,
@@ -47,9 +48,15 @@ export const clearRefreshToken = async (token: string) => {
 
 // Cari user berdasarkan refresh token
 export const findUserByToken = async (token: string) => {
-    return await prisma.user.findUnique({
+    return await prisma.users.findFirst({
         where: {
             refresh_token: token,
         }
+    })
+}
+
+export const findHrProfileByUserId = (userId: string) => {
+    return prisma.hr_profiles.findFirst({
+        where: { user_id: userId}
     })
 }

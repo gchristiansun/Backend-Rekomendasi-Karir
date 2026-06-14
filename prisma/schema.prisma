@@ -1,28 +1,495 @@
 generator client {
-    provider    = "prisma-client-js"
+  provider = "prisma-client-js"
+}
+
+generator erd {
+  provider = "prisma-erd-generator"
 }
 
 datasource db {
-    provider = "mysql"    
-    url      = env("DATABASE_URL")
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
-model user {
-  id            String         @id @default(ulid())
-  email         String         @unique(map: "email") @db.VarChar(255)
-  name          String?        @db.VarChar(255)
-  phone         String?        @db.VarChar(30)
-  password      String?        @db.Text
-  role          user_role?
-  created_at    DateTime       @default(now()) @db.DateTime(0)
-  updated_at    DateTime       @updatedAt @db.DateTime(0)
-  refresh_token String?        @db.Text
+model admin_users {
+  id         String    @id @default(ulid())
+  user_id    String?   @unique(map: "user_id") @db.Char(36)
+  name       String    @db.VarChar(255)
+  prodi_id   String?   @db.Char(36)
+  email      String?   @db.VarChar(255)
+  deleted_at DateTime? @db.Timestamp(0)
+  created_at DateTime  @default(now()) @db.Timestamp(0)
+  prodi      prodi?    @relation(fields: [prodi_id], references: [id], onUpdate: Restrict, map: "fk_admin_prodi")
+  users      users?    @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "fk_admin_user")
+
+  @@index([prodi_id], map: "fk_admin_prodi")
+}
+
+model application_matches {
+  application_id String        @db.Char(36)
+  clo_id         String        @db.Char(36)
+  requirement_id String?       @db.Char(36)
+  similarity     Float?
+  grade_weight   Float?
+  contribution   Float?
+  applications   applications  @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_application_match_application")
+  clos           clos          @relation(fields: [clo_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_application_match_clo")
+  requirements   requirements? @relation(fields: [requirement_id], references: [id], onUpdate: Restrict, map: "fk_application_match_requirement")
+
+  @@id([application_id, clo_id])
+  @@index([clo_id], map: "fk_application_match_clo")
+  @@index([requirement_id], map: "fk_application_match_requirement")
+}
+
+model applications {
+  id                          String                        @id @default(ulid())
+  student_id                  String?                       @db.Char(36)
+  job_id                      String?                       @db.Char(36)
+  match_score                 Float?
+  status                      applications_status?          @default(new)
+  applied_at                  DateTime                      @default(now()) @db.Timestamp(0)
+  updated_at                  DateTime                      @default(now()) @db.Timestamp(0)
+  application_matches         application_matches[]
+  jobs                        jobs?                         @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_applications_job")
+  students                    students?                     @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_applications_student")
+  recommendation_explanations recommendation_explanations[]
+
+  @@unique([student_id, job_id], map: "student_id")
+  @@index([job_id], map: "fk_applications_job")
+}
+
+model clo_skills {
+  clo_id   String @db.Char(36)
+  skill_id String @db.Char(36)
+  weight   Float? @default(1)
+  clos     clos   @relation(fields: [clo_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_clo_skills_clo")
+  skills   skills @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_clo_skills_skill")
+
+  @@id([clo_id, skill_id])
+  @@index([skill_id], map: "fk_clo_skills_skill")
+}
+
+model clos {
+  id                  String                @id @default(ulid())
+  matkul_id           String?               @db.Char(36)
+  clo_code            String?               @db.VarChar(100)
+  clo_text            String                @db.Text
+  embedding           String?               @db.LongText
+  created_at          DateTime              @default(now()) @db.Timestamp(0)
+  application_matches application_matches[]
+  clo_skills          clo_skills[]
+  matkul              matkul?               @relation(fields: [matkul_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_clos_matkul")
+  student_clos        student_clos[]
+
+  @@index([matkul_id], map: "fk_clos_matkul")
+}
+
+model companies {
+  id              String            @id @default(ulid())
+  name            String            @db.VarChar(255)
+  industry        String?           @db.VarChar(255)
+  location        String?           @db.VarChar(255)
+  size            String?           @db.VarChar(100)
+  founded         String?           @db.VarChar(50)
+  website         String?           @db.Text
+  logo_icon       String?           @db.Text
+  verified        Boolean?          @default(false)
+  description     String?           @db.Text
+  created_at      DateTime          @default(now()) @db.Timestamp(0)
+  hr_profiles     hr_profiles[]
+  jobs            jobs[]
+  student_targets student_targets[]
+}
+
+model course_skills {
+  course_id String  @db.Char(36)
+  skill_id  String  @db.Char(36)
+  courses   courses @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_course_skills_course")
+  skills    skills  @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_course_skills_skill")
+
+  @@id([course_id, skill_id])
+  @@index([skill_id], map: "fk_course_skills_skill")
+}
+
+model courses {
+  id              String            @id @default(ulid())
+  title           String            @db.VarChar(255)
+  provider        String?           @db.VarChar(255)
+  description     String?           @db.Text
+  level           courses_level?
+  duration        String?           @db.VarChar(100)
+  url             String?           @db.Text
+  thumbnail       String?           @db.Text
+  embedding       String?           @db.LongText
+  created_at      DateTime          @default(now()) @db.Timestamp(0)
+  course_skills   course_skills[]
+  student_courses student_courses[]
+}
+
+model curriculum_versions {
+  id         String   @id @default(ulid())
+  prodi_id   String   @db.Char(36)
+  year       Int
+  active     Boolean? @default(false)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  prodi      prodi    @relation(fields: [prodi_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_curriculum_prodi")
+  matkul     matkul[]
+
+  @@index([prodi_id], map: "fk_curriculum_prodi")
+}
+
+model grade_scale {
+  letter       String         @id @db.VarChar(5)
+  weight       Float
+  student_clos student_clos[]
+}
+
+model hr_profiles {
+  id                 String               @id @default(ulid())
+  user_id            String?              @unique(map: "user_id") @db.Char(36)
+  name               String               @db.VarChar(255)
+  company_id         String?              @db.Char(36)
+  position           String?              @db.VarChar(255)
+  created_at         DateTime             @default(now()) @db.Timestamp(0)
+  companies          companies?           @relation(fields: [company_id], references: [id], onUpdate: Restrict, map: "fk_hr_company")
+  users              users?               @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "fk_hr_user")
+  jobs               jobs[]
+  talent_invitations talent_invitations[]
+
+  @@index([company_id], map: "fk_hr_company")
+}
+
+model job_skill_map {
+  job_id     String @db.Char(36)
+  skill_id   String @db.Char(36)
+  importance Float? @default(1)
+  jobs       jobs   @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_job_skill_job")
+  skills     skills @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_job_skill_skill")
+
+  @@id([job_id, skill_id])
+  @@index([skill_id], map: "fk_job_skill_skill")
+}
+
+model jobs {
+  id                 String               @id @default(ulid())
+  hr_id              String?              @db.Char(36)
+  company_id         String?              @db.Char(36)
+  title              String               @db.VarChar(255)
+  location           String?              @db.VarChar(255)
+  job_type           jobs_job_type?
+  description        String?              @db.Text
+  status             jobs_status?         @default(processing)
+  salary             String?              @db.VarChar(255)
+  category           String?              @db.VarChar(255)
+  minimum_gpa        Float?
+  experience_level   String?              @db.VarChar(100)
+  remote_type        jobs_remote_type?
+  posted_at          DateTime             @default(now()) @db.Timestamp(0)
+  deadline           DateTime?            @db.Timestamp(0)
+  closed_at          DateTime?            @db.Timestamp(0)
+  applications       applications[]
+  job_skill_map      job_skill_map[]
+  companies          companies?           @relation(fields: [company_id], references: [id], onUpdate: Restrict, map: "fk_jobs_company")
+  hr_profiles        hr_profiles?         @relation(fields: [hr_id], references: [id], onUpdate: Restrict, map: "fk_jobs_hr")
+  requirements       requirements[]
+  skill_gaps         skill_gaps[]
+  talent_invitations talent_invitations[]
+
+  @@index([company_id], map: "fk_jobs_company")
+  @@index([hr_id], map: "fk_jobs_hr")
+}
+
+model matkul {
+  id                    String               @id @default(ulid())
+  kode                  String               @unique(map: "kode") @db.VarChar(50)
+  nama                  String               @db.VarChar(255)
+  sks                   Int?
+  semester              Int?
+  deskripsi             String?              @db.Text
+  prodi_id              String?              @db.Char(36)
+  curriculum_version_id String?              @db.Char(36)
+  created_at            DateTime             @default(now()) @db.Timestamp(0)
+  clos                  clos[]
+  curriculum_versions   curriculum_versions? @relation(fields: [curriculum_version_id], references: [id], onUpdate: Restrict, map: "fk_matkul_curriculum")
+  prodi                 prodi?               @relation(fields: [prodi_id], references: [id], onUpdate: Restrict, map: "fk_matkul_prodi")
+
+  @@index([curriculum_version_id], map: "fk_matkul_curriculum")
+  @@index([prodi_id], map: "fk_matkul_prodi")
+}
+
+model notifications {
+  id         String    @id @default(ulid())
+  user_id    String?   @db.Char(36)
+  type       String?   @db.VarChar(100)
+  payload    String?   @db.LongText
+  read_at    DateTime? @db.Timestamp(0)
+  created_at DateTime  @default(now()) @db.Timestamp(0)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_notifications_user")
+
+  @@index([user_id], map: "fk_notifications_user")
+}
+
+model prodi {
+  id                  String                @id @default(ulid())
+  name                String                @unique(map: "name") @db.VarChar(255)
+  fakultas            String?               @db.VarChar(255)
+  integration_status  String?               @default("planned") @db.VarChar(100)
+  created_at          DateTime              @default(now()) @db.Timestamp(0)
+  admin_users         admin_users[]
+  curriculum_versions curriculum_versions[]
+  matkul              matkul[]
+  students            students[]
+}
+
+model recommendation_explanations {
+  id                String        @id @default(ulid())
+  application_id    String?       @db.Char(36)
+  explanation_text  String?       @db.Text
+  top_matching_clos String?       @db.LongText
+  missing_clos      String?       @db.LongText
+  generated_by      String?       @default("ai") @db.VarChar(50)
+  created_at        DateTime      @default(now()) @db.Timestamp(0)
+  applications      applications? @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_recommendation_application")
+
+  @@index([application_id], map: "fk_recommendation_application")
+}
+
+model requirements {
+  id                  String                         @id @default(ulid())
+  job_id              String?                        @db.Char(36)
+  req_text            String                         @db.Text
+  type                requirements_type?
+  embedding           String?                        @db.LongText
+  embedding_status    requirements_embedding_status? @default(pending)
+  position            Int?                           @default(0)
+  created_at          DateTime                       @default(now()) @db.Timestamp(0)
+  application_matches application_matches[]
+  jobs                jobs?                          @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_requirements_job")
+
+  @@index([job_id], map: "fk_requirements_job")
+}
+
+model skill_gaps {
+  id             String    @id @default(ulid())
+  student_id     String?   @db.Char(36)
+  job_id         String?   @db.Char(36)
+  gap_score      Float?
+  matched_skills String?   @db.LongText
+  missing_skills String?   @db.LongText
+  generated_at   DateTime  @default(now()) @db.Timestamp(0)
+  jobs           jobs?     @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_skill_gap_job")
+  students       students? @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_skill_gap_student")
+
+  @@index([job_id], map: "fk_skill_gap_job")
+  @@index([student_id], map: "fk_skill_gap_student")
+}
+
+model skills {
+  id                String              @id @default(ulid())
+  name              String              @unique(map: "name") @db.VarChar(255)
+  category          String?             @db.VarChar(100)
+  description       String?             @db.Text
+  embedding         String?             @db.LongText
+  created_at        DateTime            @default(now()) @db.Timestamp(0)
+  clo_skills        clo_skills[]
+  course_skills     course_skills[]
+  job_skill_map     job_skill_map[]
+  student_skill_map student_skill_map[]
+}
+
+model student_clos {
+  student_id     String       @db.Char(36)
+  clo_id         String       @db.Char(36)
+  grade          String?      @db.VarChar(5)
+  semester_taken Int?
+  year_taken     Int?
+  clos           clos         @relation(fields: [clo_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_clos_clo")
+  grade_scale    grade_scale? @relation(fields: [grade], references: [letter], onUpdate: Restrict, map: "fk_student_clos_grade")
+  students       students     @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_clos_student")
+
+  @@id([student_id, clo_id])
+  @@index([clo_id], map: "fk_student_clos_clo")
+  @@index([grade], map: "fk_student_clos_grade")
+}
+
+model student_courses {
+  id           String    @id @default(ulid())
+  student_id   String?   @db.Char(36)
+  course_id    String?   @db.Char(36)
+  bookmarked   Boolean?  @default(false)
+  completed    Boolean?  @default(false)
+  progress     Int?      @default(0)
+  started_at   DateTime? @db.Timestamp(0)
+  completed_at DateTime? @db.Timestamp(0)
+  created_at   DateTime  @default(now()) @db.Timestamp(0)
+  courses      courses?  @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_courses_course")
+  students     students? @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_courses_student")
+
+  @@index([course_id], map: "fk_student_courses_course")
+  @@index([student_id], map: "fk_student_courses_student")
+}
+
+model student_skill_map {
+  student_id  String   @db.Char(36)
+  skill_id    String   @db.Char(36)
+  source      String?  @default("clo") @db.VarChar(100)
+  proficiency Float?   @default(0)
+  skills      skills   @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_skill_skill")
+  students    students @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_skill_student")
+
+  @@id([student_id, skill_id])
+  @@index([skill_id], map: "fk_student_skill_skill")
+}
+
+model student_targets {
+  id                String     @id @default(ulid())
+  student_id        String?    @db.Char(36)
+  target_role       String?    @db.VarChar(255)
+  target_company_id String?    @db.Char(36)
+  created_at        DateTime   @default(now()) @db.Timestamp(0)
+  companies         companies? @relation(fields: [target_company_id], references: [id], onUpdate: Restrict, map: "fk_student_target_company")
+  students          students?  @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_target_student")
+
+  @@index([target_company_id], map: "fk_student_target_company")
+  @@index([student_id], map: "fk_student_target_student")
+}
+
+model students {
+  id                 String               @id @default(ulid())
+  user_id            String?              @unique(map: "user_id") @db.Char(36)
+  nim                String               @unique(map: "nim") @db.VarChar(50)
+  name               String               @db.VarChar(255)
+  prodi_id           String?              @db.Char(36)
+  angkatan           Int?
+  status             students_status?     @default(active)
+  email              String?              @db.VarChar(255)
+  bio                String?              @db.Text
+  linkedin_url       String?              @db.Text
+  github_url         String?              @db.Text
+  portfolio_url      String?              @db.Text
+  cv_url             String?              @db.Text
+  gpa                Float?
+  created_at         DateTime             @default(now()) @db.Timestamp(0)
+  applications       applications[]
+  skill_gaps         skill_gaps[]
+  student_clos       student_clos[]
+  student_courses    student_courses[]
+  student_skill_map  student_skill_map[]
+  student_targets    student_targets[]
+  prodi              prodi?               @relation(fields: [prodi_id], references: [id], onUpdate: Restrict, map: "fk_students_prodi")
+  users              users?               @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "fk_students_user")
+  talent_invitations talent_invitations[]
+
+  @@index([prodi_id], map: "fk_students_prodi")
+}
+
+model system_logs {
+  id         String   @id @default(ulid())
+  actor_id   String?  @db.Char(36)
+  action     String   @db.VarChar(255)
+  entity     String?  @db.VarChar(255)
+  entity_id  String?  @db.Char(36)
+  metadata   String?  @db.LongText
+  created_at DateTime @default(now()) @db.Timestamp(0)
+}
+
+model talent_invitations {
+  id           String                     @id @default(ulid())
+  hr_id        String?                    @db.Char(36)
+  student_id   String?                    @db.Char(36)
+  job_id       String?                    @db.Char(36)
+  status       talent_invitations_status? @default(invited)
+  sent_at      DateTime                   @default(now()) @db.Timestamp(0)
+  responded_at DateTime?                  @db.Timestamp(0)
+  hr_profiles  hr_profiles?               @relation(fields: [hr_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_talent_invitation_hr")
+  jobs         jobs?                      @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_talent_invitation_job")
+  students     students?                  @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_talent_invitation_student")
+
+  @@index([hr_id], map: "fk_talent_invitation_hr")
+  @@index([job_id], map: "fk_talent_invitation_job")
+  @@index([student_id], map: "fk_talent_invitation_student")
+}
+
+model users {
+  id            String          @id @default(ulid())
+  email         String          @unique(map: "email") @db.VarChar(255)
+  password      String          @db.VarChar(255)
+  role          users_role
+  created_at    DateTime        @default(now()) @db.Timestamp(0)
+  refresh_token String ?        @db.Text
+  admin_users   admin_users?
+  hr_profiles   hr_profiles?
+  notifications notifications[]
+  students      students?
   @@unique([refresh_token(length: 191)], map: "refresh_token")
 }
 
-enum user_role {
-    user
-    company
-    admin
-    educational_institution
+enum requirements_type {
+  hard_skill
+  soft_skill
+  education
+  experience
+  tool
+  language
+  certification
+}
+
+enum users_role {
+  student
+  hr
+  admin
+  superadmin
+}
+
+enum applications_status {
+  new
+  reviewed
+  interview
+  accepted
+  rejected
+}
+
+enum courses_level {
+  beginner
+  intermediate
+  advanced
+}
+
+enum talent_invitations_status {
+  invited
+  responded
+  declined
+}
+
+enum jobs_job_type {
+  Full_time  @map("Full-time")
+  Part_time  @map("Part-time")
+  Internship
+  Contract
+}
+
+enum requirements_embedding_status {
+  pending
+  encoding
+  done
+  failed
+}
+
+enum students_status {
+  active
+  inactive
+}
+
+enum jobs_status {
+  processing
+  active
+  closing
+  closed
+  draft
+}
+
+enum jobs_remote_type {
+  onsite
+  hybrid
+  remote
 }

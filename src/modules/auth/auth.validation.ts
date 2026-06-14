@@ -2,9 +2,10 @@ import { z }  from 'zod';
 
 // Skema validasi register
 export const registerUserSchema = z.object({
-    name: z.string().min(3, 'Name is required (min 3 chars)'),
+    // name: z.string().min(3, 'Name is required (min 3 chars)'),
     email: z.email('Invalid email address'),
     password: z.string().min(8, 'Password must be at least 6 charactest long'),
+    role: z.enum(['admin', 'hr', 'student'])
 });
 
 // Skema validasi login

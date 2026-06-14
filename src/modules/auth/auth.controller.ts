@@ -8,7 +8,7 @@ import {
     verifyRefreshToken,
 } from '../../utils/jwt'
 import { LoginUserInput, RegisterUserInput } from './auth.validation'
-import {UserPayload } from '../../middleware/auth.middleware'
+import { UserPayload } from '../../middleware/auth.middleware'
 
 // Handle register user
 export const registerUserHandler = async (
@@ -17,23 +17,24 @@ export const registerUserHandler = async (
     next: NextFunction
 ) => {
     try {
-        const { email, name, password } = req.body;
+        const { email, password, role } = req.body;
         const existingUser = await authService.findUserByEmail(email);
         if (existingUser) {
             throw new HttpError(409, 'Email already exists');
         }
 
         const user = await authService.createUser({
-            name, 
+            // name, 
             email,
-            password
+            password,
+            role
         })
 
         return res.status(201).json({
             message: 'User registered succesfully',
             data: {
                 id: user.id,
-                name: user.name,
+                // name: user.name,
                 email: user.email,
                 role: user.role
             }
@@ -64,15 +65,30 @@ export const loginUserHandler = async (
             throw new HttpError(401, 'Invalid email or password')
         }
 
-        const payload = { id: user.id, role: user.role };
+        let companyId: string | null = null
+
+        if (user.role === "hr") {
+            const hrProfile = await authService.findHrProfileByUserId(user.id)
+
+            if (hrProfile) {
+                companyId = hrProfile.company_id
+            }
+        }
+
+        const payload = { id: user.id, role: user.role, companyId };
 
         // Buat access token singkat dan refresh token yang lebih lama
         const accessToken = signAccessToken(payload);
         const refreshToken = signRefreshToken(payload);
-
+        console.log("Generated refresh token:");
+        console.log(refreshToken);
         // Simpan refresh token ke database
         await authService.saveRefreshToken(user.id, refreshToken);
+        const check = await authService.findUserByEmail(user.email);
 
+        console.log("Saved in DB:");
+        console.log(check?.refresh_token);
+        
         // Simpan refresh token sebagai httpOnly cookie
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
@@ -86,9 +102,10 @@ export const loginUserHandler = async (
             accessToken,
             user: {
                 id: user.id, 
-                name: user.name,
+                // name: user.name,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                companyId: companyId
             }
         });
     } catch (error) {
@@ -153,7 +170,7 @@ export const logoutUserHandler = async (
         })
 
         return res.status(200).json({
-            message: 'Logged out successully'
+            message: 'Logged out successfully'
         })
     } catch (error) {
         next(error);

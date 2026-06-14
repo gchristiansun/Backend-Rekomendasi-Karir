@@ -1,0 +1,18 @@
+tags:
+  - name: COMPANIES
+    descriprion: API untuk CRUD companies
+
+# Get All Companies
+/api/companies/:
+  get:
+    summary: GET ALL COMPANIES
+    tags: 
+      - COMPANIES
+    reuqestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              
