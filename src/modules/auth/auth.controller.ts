@@ -1,161 +1,121 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
 import * as authService from "./auth.service";
-import {HttpError } from '../../utils/httpError'
+import { HttpError } from "../../utils/httpError";
 import { comparePassword } from "../../utils/password";
 import {
-    signAccessToken,
-    signRefreshToken,
-    verifyRefreshToken,
-} from '../../utils/jwt'
-import { LoginUserInput, RegisterUserInput } from './auth.validation'
-import {UserPayload } from '../../middleware/auth.middleware'
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} from "../../utils/jwt";
+import { LoginUserInput, RegisterUserInput } from "./auth.validation";
+import { UserPayload } from "../../middleware/auth.middleware";
+import { asyncHandler } from "../../utils/asyncHandler";
+import { sendCreated, sendSuccess } from "../../utils/apiResponse";
+import { ROLES, USER_STATUS } from "../../constants";
 
-// Handle register user
-export const registerUserHandler = async (
-    req: Request<{}, {}, RegisterUserInput>,
-    res: Response,
-    next: NextFunction
-) => {
-    try {
-        const { email, name, password } = req.body;
-        const existingUser = await authService.findUserByEmail(email);
-        if (existingUser) {
-            throw new HttpError(409, 'Email already exists');
-        }
+const REFRESH_COOKIE = "refreshToken";
+const refreshCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict" as const,
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 hari
+};
 
-        const user = await authService.createUser({
-            name, 
-            email,
-            password
-        })
+export const registerUserHandler = asyncHandler(
+  async (req: Request<{}, {}, RegisterUserInput>, res: Response) => {
+    const input = req.body;
 
-        return res.status(201).json({
-            message: 'User registered succesfully',
-            data: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role
-            }
-        })
-    } catch (error) {
-        next(error);
+    const existing = await authService.findUserByEmail(input.email);
+    if (existing) throw new HttpError(409, "Email sudah terdaftar");
+
+    if (input.role === ROLES.COMPANY) {
+      const user = await authService.createCompanyAccount(input);
+      return sendCreated(
+        res,
+        {
+          id: user.id, name: user.name, email: user.email, role: user.role,
+          company: user.companyMember?.company,
+        },
+        "Akun perusahaan terdaftar. Menunggu verifikasi Admin sebelum dapat memposting lowongan.",
+      );
     }
-}
 
-// Handle login user
-export const loginUserHandler = async (
-    req: Request<{}, {}, LoginUserInput>,
-    res: Response,
-    next: NextFunction 
-) => {
-    try {
-        const { email, password } = req.body;
-        const user = await authService.findUserByEmail(email);
-        if (!user) {
-            throw new HttpError(404, 'User not found');
-        }
-        if (!user.password) {
-            throw new HttpError(401, 'Invalid email or password')
-        }
+    const user = await authService.createStudent(input);
+    return sendCreated(
+      res,
+      { id: user.id, name: user.name, email: user.email, role: user.role, studentId: user.student?.id },
+      "Registrasi mahasiswa berhasil",
+    );
+  },
+);
 
-        const isPasswordValid = await comparePassword(password, user.password)
-        if (!isPasswordValid) {
-            throw new HttpError(401, 'Invalid email or password')
-        }
+export const loginUserHandler = asyncHandler(
+  async (req: Request<{}, {}, LoginUserInput>, res: Response) => {
+    const { email, password } = req.body;
 
-        const payload = { id: user.id, role: user.role };
-
-        // Buat access token singkat dan refresh token yang lebih lama
-        const accessToken = signAccessToken(payload);
-        const refreshToken = signRefreshToken(payload);
-
-        // Simpan refresh token ke database
-        await authService.saveRefreshToken(user.id, refreshToken);
-
-        // Simpan refresh token sebagai httpOnly cookie
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 1000
-        });
-
-        // Kirim accss token sebagai JSON
-        return res.status(200).json({
-            accessToken,
-            user: {
-                id: user.id, 
-                name: user.name,
-                email: user.email,
-                role: user.role
-            }
-        });
-    } catch (error) {
-        next(error);
+    const user = await authService.findUserByEmail(email);
+    if (!user || !user.password) {
+      throw new HttpError(401, "Email atau password salah");
     }
-}
-
-// Endpoint refresh token
-export const refreshAccessTokenHandler = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    try {
-        const tokenFromCookie = req.cookies.refreshToken;
-        if (!tokenFromCookie) {
-            throw new HttpError(401, 'No refresh token provided');            
-        }
-
-        const payload = verifyRefreshToken(tokenFromCookie) as UserPayload;
-        if (!payload) {
-            throw new HttpError(403, 'Invalid or expired refresh token');
-        }
-
-        const user = await authService.findUserByToken(tokenFromCookie);
-        if (!user || user.id !== payload.id) {
-            throw new HttpError(403, 'Invalid token or user mismatch');
-        }
-
-        // Buat access token baru
-        const newAccessToken = signAccessToken({
-            id: user.id,
-            role: user.role,
-        })
-
-        return res.status(200).json({
-            accessToken: newAccessToken,
-        })
-    } catch (error) {
-        next(error);
+    if (user.status === USER_STATUS.SUSPENDED) {
+      throw new HttpError(403, "Akun Anda telah dinonaktifkan. Hubungi admin.");
     }
-}
 
-// Endpoint logout
-export const logoutUserHandler = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    try {
-        const tokenFromCookie = req.cookies.refreshToken;
+    const valid = await comparePassword(password, user.password);
+    if (!valid) throw new HttpError(401, "Email atau password salah");
 
-        if (tokenFromCookie) {
-            await authService.clearRefreshToken(tokenFromCookie);
-        }
+    const payload = { id: user.id, role: user.role };
+    const accessToken = signAccessToken(payload);
+    const refreshToken = signRefreshToken(payload);
 
-        res.cookie('refreshToken', '', {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            expires: new Date(0),
-        })
+    await authService.saveRefreshToken(user.id, refreshToken);
+    res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
 
-        return res.status(200).json({
-            message: 'Logged out successully'
-        })
-    } catch (error) {
-        next(error);
+    return sendSuccess(
+      res,
+      {
+        accessToken,
+        user: { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status },
+      },
+      "Login berhasil",
+    );
+  },
+);
+
+export const refreshAccessTokenHandler = asyncHandler(
+  async (req: Request, res: Response) => {
+    const tokenFromCookie = req.cookies?.[REFRESH_COOKIE];
+    if (!tokenFromCookie) throw new HttpError(401, "No refresh token provided");
+
+    const payload = verifyRefreshToken(tokenFromCookie) as UserPayload | null;
+    if (!payload) throw new HttpError(403, "Invalid or expired refresh token");
+
+    const user = await authService.findUserByToken(tokenFromCookie);
+    if (!user || user.id !== payload.id) {
+      throw new HttpError(403, "Invalid token or user mismatch");
     }
-}
+
+    const accessToken = signAccessToken({ id: user.id, role: user.role });
+    return sendSuccess(res, { accessToken }, "Token diperbarui");
+  },
+);
+
+export const logoutUserHandler = asyncHandler(
+  async (req: Request, res: Response) => {
+    const tokenFromCookie = req.cookies?.[REFRESH_COOKIE];
+    if (tokenFromCookie) await authService.clearRefreshToken(tokenFromCookie);
+
+    res.cookie(REFRESH_COOKIE, "", {
+      ...refreshCookieOptions,
+      maxAge: undefined,
+      expires: new Date(0),
+    });
+    return sendSuccess(res, null, "Logout berhasil");
+  },
+);
+
+export const meHandler = asyncHandler(async (req: Request, res: Response) => {
+  const me = await authService.getMe(req.user!.id);
+  if (!me) throw new HttpError(404, "User tidak ditemukan");
+  return sendSuccess(res, me, "Profil pengguna");
+});

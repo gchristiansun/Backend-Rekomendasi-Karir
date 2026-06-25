@@ -140,8 +140,8 @@ model StudentSkill {
 model Course {
     id           String   @id @default(ulid())
     universityId String?
-    code         String
-    name         String
+    code         String?
+    name         String   @unique
     sks          Int?
     semester     Int?
     rps          String?
@@ -151,6 +151,7 @@ model Course {
     university University?    @relation(fields: [universityId], references: [id], onDelete: SetNull)
     skills     CourseSkill[]
     takenBy    CourseTaken[]
+    clos       CLO[]
 
     @@index([universityId])
 }
@@ -180,6 +181,20 @@ model CourseTaken {
     course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
     @@unique([studentId, courseId])
+    @@index([courseId])
+}
+
+model CLO {
+    id             String   @id @default(ulid())
+    courseId       String
+    code           String?  // mis. "CLO 1"
+    text           String   // clo_text (rincian capaian+indikator+materi)
+    paraphrase     String?  // clo_paraphrase (ringkasan)
+    embedding      String?  // vektor 1024-dim disimpan sebagai JSON string
+    created_at     DateTime @default(now())
+
+    course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
     @@index([courseId])
 }
 

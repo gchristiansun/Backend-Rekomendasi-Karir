@@ -1,55 +1,113 @@
-import prisma from '../../config/prisma';
-import { hashPassword } from '../../utils/password';
-import { RegisterUserInput } from './auth.validation';
-// import { user_role } from '@prisma/client';
+import prisma from "../../config/prisma";
+import { hashPassword } from "../../utils/password";
+import { RegisterUserInput } from "./auth.validation";
+import {
+  ROLES,
+  USER_STATUS,
+  COMPANY_STATUS,
+  COMPANY_POSITION,
+} from "../../constants";
 
-// Cek keberadaan email
 export const findUserByEmail = async (email: string) => {
-    return await prisma.user.findUnique({
-        where: {email},
-    })
-}
+  return prisma.user.findUnique({ where: { email } });
+};
 
-// Buat user baru 
-export const createUser = async (input: RegisterUserInput) => {
-    const hashedPassword = await hashPassword(input.password);
+// Registrasi mahasiswa: buat User + profil Student kosong.
+export const createStudent = async (input: RegisterUserInput) => {
+  const hashed = await hashPassword(input.password);
+  return prisma.user.create({
+    data: {
+      name: input.name,
+      email: input.email,
+      phone: input.phone,
+      password: hashed,
+      role: ROLES.STUDENT,
+      status: USER_STATUS.ACTIVE,
+      student: {
+        create: { nim: input.nim },
+      },
+    },
+    include: { student: true },
+  });
+};
 
-    const user = await prisma.user.create({
-        data: {
-            name: input.name,
-            email: input.email,
-            password: hashedPassword,
-            // role: user_role.customer,
-        }
-    })
-    return user;
-}
+// Registrasi perusahaan: buat User(role=company) + Company(pending) + membership(direktur).
+export const createCompanyAccount = async (input: RegisterUserInput) => {
+  const hashed = await hashPassword(input.password);
+  return prisma.user.create({
+    data: {
+      name: input.name,
+      email: input.email,
+      phone: input.phone,
+      password: hashed,
+      role: ROLES.COMPANY,
+      status: USER_STATUS.ACTIVE,
+      companyMember: {
+        create: {
+          position: COMPANY_POSITION.DIREKTUR,
+          company: {
+            create: {
+              name: input.companyName!,
+              status: COMPANY_STATUS.PENDING,
+            },
+          },
+        },
+      },
+    },
+    include: { companyMember: { include: { company: true } } },
+  });
+};
 
-// Simpan refresh token
 export const saveRefreshToken = async (userId: string, refreshToken: string) => {
-    return await prisma.user.update({
-        where: { id: userId },
-        data: {
-            refresh_token: refreshToken,
-        }
-    })
-}
+  return prisma.user.update({
+    where: { id: userId },
+    data: { refresh_token: refreshToken },
+  });
+};
 
-// Hapus refresh token ketika logout
 export const clearRefreshToken = async (token: string) => {
-    return await prisma.user.update({
-        where: { refresh_token: token },
-        data:{
-            refresh_token: null,
-        }
-    })
-}
+  const user = await prisma.user.findFirst({ where: { refresh_token: token } });
+  if (!user) return null;
+  return prisma.user.update({
+    where: { id: user.id },
+    data: { refresh_token: null },
+  });
+};
 
-// Cari user berdasarkan refresh token
 export const findUserByToken = async (token: string) => {
-    return await prisma.user.findUnique({
-        where: {
-            refresh_token: token,
-        }
-    })
-}
+  return prisma.user.findFirst({ where: { refresh_token: token } });
+};
+
+// Profil lengkap untuk endpoint /me (termasuk konteks role).
+export const getMe = async (userId: string) => {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      status: true,
+      created_at: true,
+      student: {
+        select: {
+          id: true, nim: true, major: true, semester: true, gpa: true,
+          university: { select: { id: true, name: true } },
+        },
+      },
+      companyMember: {
+        select: {
+          position: true,
+          company: { select: { id: true, name: true, status: true } },
+        },
+      },
+      universityMember: {
+        select: {
+          position: true,
+          university: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+};

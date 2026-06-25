@@ -4,30 +4,18 @@ import {
   logoutUserHandler,
   refreshAccessTokenHandler,
   registerUserHandler,
+  meHandler,
 } from "./auth.controller";
 import { validateRequest } from "../../middleware/validateRequest";
 import { loginUserSchema, registerUserSchema } from "./auth.validation";
+import { authMiddleware } from "../../middleware/auth.middleware";
 
 const authRouter = Router();
 
-// Route untuk register
-authRouter.post(
-  "/register",
-  validateRequest(registerUserSchema),
-  registerUserHandler,
-);
-
-// Route untuk login
-authRouter.post(
-    "/login", 
-    validateRequest(loginUserSchema), 
-    loginUserHandler
-);
-
-// Route untuk logout
+authRouter.post("/register", validateRequest(registerUserSchema), registerUserHandler);
+authRouter.post("/login", validateRequest(loginUserSchema), loginUserHandler);
 authRouter.post("/logout", logoutUserHandler);
-
-// Route untuk refresh token
 authRouter.post("/refresh-token", refreshAccessTokenHandler);
+authRouter.get("/me", authMiddleware, meHandler);
 
 export default authRouter;
