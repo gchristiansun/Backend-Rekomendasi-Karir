@@ -7,22 +7,21 @@ generator erd {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
 }
 
 model admin_users {
   id         String    @id @default(ulid())
-  user_id    String?   @unique(map: "user_id") @db.Char(36)
+  user_id    String?   @unique @db.Char(36)
   name       String    @db.VarChar(255)
   prodi_id   String?   @db.Char(36)
   email      String?   @db.VarChar(255)
   deleted_at DateTime? @db.Timestamp(0)
   created_at DateTime  @default(now()) @db.Timestamp(0)
-  prodi      prodi?    @relation(fields: [prodi_id], references: [id], onUpdate: Restrict, map: "fk_admin_prodi")
-  users      users?    @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "fk_admin_user")
+  prodi      prodi?    @relation(fields: [prodi_id], references: [id], onUpdate: Restrict)
+  users      users?    @relation(fields: [user_id], references: [id], onUpdate: Restrict)
 
-  @@index([prodi_id], map: "fk_admin_prodi")
+  @@index([prodi_id])
 }
 
 model application_matches {
@@ -32,9 +31,9 @@ model application_matches {
   similarity     Float?
   grade_weight   Float?
   contribution   Float?
-  applications   applications  @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_application_match_application")
-  clos           clos          @relation(fields: [clo_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_application_match_clo")
-  requirements   requirements? @relation(fields: [requirement_id], references: [id], onUpdate: Restrict, map: "fk_application_match_requirement")
+  applications   applications  @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  clos           clos          @relation(fields: [clo_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  requirements   requirements? @relation(fields: [requirement_id], references: [id], onUpdate: Restrict)
 
   @@id([application_id, clo_id])
   @@index([clo_id], map: "fk_application_match_clo")
@@ -50,11 +49,11 @@ model applications {
   applied_at                  DateTime                      @default(now()) @db.Timestamp(0)
   updated_at                  DateTime                      @default(now()) @db.Timestamp(0)
   application_matches         application_matches[]
-  jobs                        jobs?                         @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_applications_job")
-  students                    students?                     @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_applications_student")
+  jobs                        jobs?                         @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  students                    students?                     @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
   recommendation_explanations recommendation_explanations[]
 
-  @@unique([student_id, job_id], map: "student_id")
+  @@unique([student_id, job_id])
   @@index([job_id], map: "fk_applications_job")
 }
 
@@ -62,11 +61,11 @@ model clo_skills {
   clo_id   String @db.Char(36)
   skill_id String @db.Char(36)
   weight   Float? @default(1)
-  clos     clos   @relation(fields: [clo_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_clo_skills_clo")
-  skills   skills @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_clo_skills_skill")
+  clos     clos   @relation(fields: [clo_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  skills   skills @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
   @@id([clo_id, skill_id])
-  @@index([skill_id], map: "fk_clo_skills_skill")
+  @@index([skill_id])
 }
 
 model clos {
@@ -74,14 +73,14 @@ model clos {
   matkul_id           String?               @db.Char(36)
   clo_code            String?               @db.VarChar(100)
   clo_text            String                @db.Text
-  embedding           String?               @db.LongText
+  embedding           String?               @db.Text
   created_at          DateTime              @default(now()) @db.Timestamp(0)
   application_matches application_matches[]
   clo_skills          clo_skills[]
-  matkul              matkul?               @relation(fields: [matkul_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_clos_matkul")
+  matkul              matkul?               @relation(fields: [matkul_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
   student_clos        student_clos[]
 
-  @@index([matkul_id], map: "fk_clos_matkul")
+  @@index([matkul_id])
 }
 
 model companies {
@@ -104,11 +103,11 @@ model companies {
 model course_skills {
   course_id String  @db.Char(36)
   skill_id  String  @db.Char(36)
-  courses   courses @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_course_skills_course")
-  skills    skills  @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_course_skills_skill")
+  courses   courses @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  skills    skills  @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
   @@id([course_id, skill_id])
-  @@index([skill_id], map: "fk_course_skills_skill")
+  @@index([skill_id])
 }
 
 model courses {
@@ -120,7 +119,7 @@ model courses {
   duration        String?           @db.VarChar(100)
   url             String?           @db.Text
   thumbnail       String?           @db.Text
-  embedding       String?           @db.LongText
+  embedding       String?           @db.Text
   created_at      DateTime          @default(now()) @db.Timestamp(0)
   course_skills   course_skills[]
   student_courses student_courses[]
@@ -132,10 +131,10 @@ model curriculum_versions {
   year       Int
   active     Boolean? @default(false)
   created_at DateTime @default(now()) @db.Timestamp(0)
-  prodi      prodi    @relation(fields: [prodi_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_curriculum_prodi")
+  prodi      prodi    @relation(fields: [prodi_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
   matkul     matkul[]
 
-  @@index([prodi_id], map: "fk_curriculum_prodi")
+  @@index([prodi_id])
 }
 
 model grade_scale {
@@ -146,12 +145,12 @@ model grade_scale {
 
 model hr_profiles {
   id                 String               @id @default(ulid())
-  user_id            String?              @unique(map: "user_id") @db.Char(36)
+  user_id            String?              @unique() @db.Char(36)
   name               String               @db.VarChar(255)
   company_id         String?              @db.Char(36)
   position           String?              @db.VarChar(255)
   created_at         DateTime             @default(now()) @db.Timestamp(0)
-  companies          companies?           @relation(fields: [company_id], references: [id], onUpdate: Restrict, map: "fk_hr_company")
+  companies          companies?           @relation(fields: [company_id], references: [id], onUpdate: Restrict)
   users              users?               @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "fk_hr_user")
   jobs               jobs[]
   talent_invitations talent_invitations[]
@@ -163,11 +162,11 @@ model job_skill_map {
   job_id     String @db.Char(36)
   skill_id   String @db.Char(36)
   importance Float? @default(1)
-  jobs       jobs   @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_job_skill_job")
-  skills     skills @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_job_skill_skill")
+  jobs       jobs   @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  skills     skills @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
   @@id([job_id, skill_id])
-  @@index([skill_id], map: "fk_job_skill_skill")
+  @@index([skill_id])
 }
 
 model jobs {
@@ -189,14 +188,14 @@ model jobs {
   closed_at          DateTime?            @db.Timestamp(0)
   applications       applications[]
   job_skill_map      job_skill_map[]
-  companies          companies?           @relation(fields: [company_id], references: [id], onUpdate: Restrict, map: "fk_jobs_company")
-  hr_profiles        hr_profiles?         @relation(fields: [hr_id], references: [id], onUpdate: Restrict, map: "fk_jobs_hr")
+  companies          companies?           @relation(fields: [company_id], references: [id], onUpdate: Restrict)
+  hr_profiles        hr_profiles?         @relation(fields: [hr_id], references: [id], onUpdate: Restrict)
   requirements       requirements[]
   skill_gaps         skill_gaps[]
   talent_invitations talent_invitations[]
 
-  @@index([company_id], map: "fk_jobs_company")
-  @@index([hr_id], map: "fk_jobs_hr")
+  @@index([company_id])
+  @@index([hr_id])
 }
 
 model matkul {
@@ -210,28 +209,28 @@ model matkul {
   curriculum_version_id String?              @db.Char(36)
   created_at            DateTime             @default(now()) @db.Timestamp(0)
   clos                  clos[]
-  curriculum_versions   curriculum_versions? @relation(fields: [curriculum_version_id], references: [id], onUpdate: Restrict, map: "fk_matkul_curriculum")
-  prodi                 prodi?               @relation(fields: [prodi_id], references: [id], onUpdate: Restrict, map: "fk_matkul_prodi")
+  curriculum_versions   curriculum_versions? @relation(fields: [curriculum_version_id], references: [id], onUpdate: Restrict)
+  prodi                 prodi?               @relation(fields: [prodi_id], references: [id], onUpdate: Restrict)
 
-  @@index([curriculum_version_id], map: "fk_matkul_curriculum")
-  @@index([prodi_id], map: "fk_matkul_prodi")
+  @@index([curriculum_version_id])
+  @@index([prodi_id])
 }
 
 model notifications {
   id         String    @id @default(ulid())
   user_id    String?   @db.Char(36)
   type       String?   @db.VarChar(100)
-  payload    String?   @db.LongText
+  payload    String?   @db.Text
   read_at    DateTime? @db.Timestamp(0)
   created_at DateTime  @default(now()) @db.Timestamp(0)
-  users      users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_notifications_user")
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([user_id], map: "fk_notifications_user")
+  @@index([user_id])
 }
 
 model prodi {
   id                  String                @id @default(ulid())
-  name                String                @unique(map: "name") @db.VarChar(255)
+  name                String                @unique() @db.VarChar(255)
   fakultas            String?               @db.VarChar(255)
   integration_status  String?               @default("planned") @db.VarChar(100)
   created_at          DateTime              @default(now()) @db.Timestamp(0)
@@ -245,13 +244,13 @@ model recommendation_explanations {
   id                String        @id @default(ulid())
   application_id    String?       @db.Char(36)
   explanation_text  String?       @db.Text
-  top_matching_clos String?       @db.LongText
-  missing_clos      String?       @db.LongText
+  top_matching_clos String?       @db.Text
+  missing_clos      String?       @db.Text
   generated_by      String?       @default("ai") @db.VarChar(50)
   created_at        DateTime      @default(now()) @db.Timestamp(0)
-  applications      applications? @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_recommendation_application")
+  applications      applications? @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([application_id], map: "fk_recommendation_application")
+  @@index([application_id])
 }
 
 model requirements {
@@ -259,14 +258,14 @@ model requirements {
   job_id              String?                        @db.Char(36)
   req_text            String                         @db.Text
   type                requirements_type?
-  embedding           String?                        @db.LongText
+  embedding           String?                        @db.Text
   embedding_status    requirements_embedding_status? @default(pending)
   position            Int?                           @default(0)
   created_at          DateTime                       @default(now()) @db.Timestamp(0)
   application_matches application_matches[]
-  jobs                jobs?                          @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_requirements_job")
+  jobs                jobs?                          @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([job_id], map: "fk_requirements_job")
+  @@index([job_id])
 }
 
 model skill_gaps {
@@ -274,14 +273,14 @@ model skill_gaps {
   student_id     String?   @db.Char(36)
   job_id         String?   @db.Char(36)
   gap_score      Float?
-  matched_skills String?   @db.LongText
-  missing_skills String?   @db.LongText
+  matched_skills String?   @db.Text
+  missing_skills String?   @db.Text
   generated_at   DateTime  @default(now()) @db.Timestamp(0)
-  jobs           jobs?     @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_skill_gap_job")
-  students       students? @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_skill_gap_student")
+  jobs           jobs?     @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  students       students? @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([job_id], map: "fk_skill_gap_job")
-  @@index([student_id], map: "fk_skill_gap_student")
+  @@index([job_id])
+  @@index([student_id])
 }
 
 model skills {
@@ -289,7 +288,7 @@ model skills {
   name              String              @unique(map: "name") @db.VarChar(255)
   category          String?             @db.VarChar(100)
   description       String?             @db.Text
-  embedding         String?             @db.LongText
+  embedding         String?             @db.Text
   created_at        DateTime            @default(now()) @db.Timestamp(0)
   clo_skills        clo_skills[]
   course_skills     course_skills[]
@@ -303,13 +302,13 @@ model student_clos {
   grade          String?      @db.VarChar(5)
   semester_taken Int?
   year_taken     Int?
-  clos           clos         @relation(fields: [clo_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_clos_clo")
-  grade_scale    grade_scale? @relation(fields: [grade], references: [letter], onUpdate: Restrict, map: "fk_student_clos_grade")
-  students       students     @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_clos_student")
+  clos           clos         @relation(fields: [clo_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  grade_scale    grade_scale? @relation(fields: [grade], references: [letter], onUpdate: Restrict)
+  students       students     @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
   @@id([student_id, clo_id])
-  @@index([clo_id], map: "fk_student_clos_clo")
-  @@index([grade], map: "fk_student_clos_grade")
+  @@index([clo_id])
+  @@index([grade])
 }
 
 model student_courses {
@@ -322,11 +321,11 @@ model student_courses {
   started_at   DateTime? @db.Timestamp(0)
   completed_at DateTime? @db.Timestamp(0)
   created_at   DateTime  @default(now()) @db.Timestamp(0)
-  courses      courses?  @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_courses_course")
-  students     students? @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_courses_student")
+  courses      courses?  @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  students     students? @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([course_id], map: "fk_student_courses_course")
-  @@index([student_id], map: "fk_student_courses_student")
+  @@index([course_id])
+  @@index([student_id])
 }
 
 model student_skill_map {
@@ -334,11 +333,11 @@ model student_skill_map {
   skill_id    String   @db.Char(36)
   source      String?  @default("clo") @db.VarChar(100)
   proficiency Float?   @default(0)
-  skills      skills   @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_skill_skill")
-  students    students @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_skill_student")
+  skills      skills   @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  students    students @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
   @@id([student_id, skill_id])
-  @@index([skill_id], map: "fk_student_skill_skill")
+  @@index([skill_id])
 }
 
 model student_targets {
@@ -347,17 +346,17 @@ model student_targets {
   target_role       String?    @db.VarChar(255)
   target_company_id String?    @db.Char(36)
   created_at        DateTime   @default(now()) @db.Timestamp(0)
-  companies         companies? @relation(fields: [target_company_id], references: [id], onUpdate: Restrict, map: "fk_student_target_company")
-  students          students?  @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_student_target_student")
+  companies         companies? @relation(fields: [target_company_id], references: [id], onUpdate: Restrict)
+  students          students?  @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([target_company_id], map: "fk_student_target_company")
-  @@index([student_id], map: "fk_student_target_student")
+  @@index([target_company_id])
+  @@index([student_id])
 }
 
 model students {
   id                 String               @id @default(ulid())
-  user_id            String?              @unique(map: "user_id") @db.Char(36)
-  nim                String               @unique(map: "nim") @db.VarChar(50)
+  user_id            String?              @unique() @db.Char(36)
+  nim                String               @unique() @db.VarChar(50)
   name               String               @db.VarChar(255)
   prodi_id           String?              @db.Char(36)
   angkatan           Int?
@@ -376,8 +375,8 @@ model students {
   student_courses    student_courses[]
   student_skill_map  student_skill_map[]
   student_targets    student_targets[]
-  prodi              prodi?               @relation(fields: [prodi_id], references: [id], onUpdate: Restrict, map: "fk_students_prodi")
-  users              users?               @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "fk_students_user")
+  prodi              prodi?               @relation(fields: [prodi_id], references: [id], onUpdate: Restrict)
+  users              users?               @relation(fields: [user_id], references: [id], onUpdate: Restrict)
   talent_invitations talent_invitations[]
 
   @@index([prodi_id], map: "fk_students_prodi")
@@ -389,7 +388,7 @@ model system_logs {
   action     String   @db.VarChar(255)
   entity     String?  @db.VarChar(255)
   entity_id  String?  @db.Char(36)
-  metadata   String?  @db.LongText
+  metadata   String?  @db.Text
   created_at DateTime @default(now()) @db.Timestamp(0)
 }
 
@@ -401,18 +400,18 @@ model talent_invitations {
   status       talent_invitations_status? @default(invited)
   sent_at      DateTime                   @default(now()) @db.Timestamp(0)
   responded_at DateTime?                  @db.Timestamp(0)
-  hr_profiles  hr_profiles?               @relation(fields: [hr_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_talent_invitation_hr")
-  jobs         jobs?                      @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_talent_invitation_job")
-  students     students?                  @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_talent_invitation_student")
+  hr_profiles  hr_profiles?               @relation(fields: [hr_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  jobs         jobs?                      @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  students     students?                  @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
-  @@index([hr_id], map: "fk_talent_invitation_hr")
-  @@index([job_id], map: "fk_talent_invitation_job")
-  @@index([student_id], map: "fk_talent_invitation_student")
+  @@index([hr_id])
+  @@index([job_id])
+  @@index([student_id])
 }
 
 model users {
   id            String          @id @default(ulid())
-  email         String          @unique(map: "email") @db.VarChar(255)
+  email         String          @unique() @db.VarChar(255)
   password      String          @db.VarChar(255)
   role          users_role
   created_at    DateTime        @default(now()) @db.Timestamp(0)
@@ -421,7 +420,7 @@ model users {
   hr_profiles   hr_profiles?
   notifications notifications[]
   students      students?
-  @@unique([refresh_token(length: 191)], map: "refresh_token")
+  @@unique([refresh_token])
 }
 
 enum requirements_type {
