@@ -1,5 +1,6 @@
 # Ignore file
 .env
+.env.placeholder
 
 # Ignore folder
 /node_modules/

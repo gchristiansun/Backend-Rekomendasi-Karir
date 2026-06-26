@@ -1,24 +1,29 @@
-import { PrismaClient } from '@prisma/client'
+// import prisma from '../src/config/prisma'
+// import pl from 'nodejs-polars'
 
-import seedUsers from './seeds/users'
-import seedMaster from './seeds/master'
-import seedAcademic from './seeds/academic'
-import seedJobs from './seeds/jobs'
-import seedRelations from './seeds/relations'
+// async function main() {
+//   console.log('Reading parquet file')
 
-const prisma = new PrismaClient()
+//   const df = pl.readParquet('./data_seeds/clos_encoded.parquet');
 
-async function main() {
-  const ctx = { prisma }
+//   console.log(`Rows found: ${df.height}`)
 
-  const users = await seedUsers(ctx)
-  const master = await seedMaster(ctx)
-  const academic = await seedAcademic(ctx, { prodi: master.prodi })
-  const jobs = await seedJobs(ctx, { company: master.company, hrUser: users.hrUser })
-  await seedRelations(ctx, { ...users, ...master, ...academic, ...jobs })
-}
+//   const rows = df.toRecords() as any[];
 
-main()
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+//   const batchSize = 1000;
+
+//   for (let i = 0; i < rows.length; i += batchSize) {
+//     const batch = rows.slice(i, i + batchSize);
+
+//     await prisma.cLOEmbedding.createMany({
+//       data: batch.map((row) => ({
+//         mata
+//       }))
+//     })
+//   }
+// }
+
+
+
+
+

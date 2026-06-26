@@ -14,14 +14,14 @@ model admin_users {
   id         String    @id @default(ulid())
   user_id    String?   @unique @db.Char(36)
   name       String    @db.VarChar(255)
-  prodi_id   String?   @db.Char(36)
+  major_id   String?   @db.Char(36)
   email      String?   @db.VarChar(255)
   deleted_at DateTime? @db.Timestamp(0)
   created_at DateTime  @default(now()) @db.Timestamp(0)
-  prodi      prodi?    @relation(fields: [prodi_id], references: [id], onUpdate: Restrict)
+  major      major?    @relation(fields: [major_id], references: [id], onUpdate: Restrict)
   users      users?    @relation(fields: [user_id], references: [id], onUpdate: Restrict)
 
-  @@index([prodi_id])
+  @@index([major_id])
 }
 
 model application_matches {
@@ -70,17 +70,17 @@ model clo_skills {
 
 model clos {
   id                  String                @id @default(ulid())
-  matkul_id           String?               @db.Char(36)
+  subject_id           String?               @db.Char(36)
   clo_code            String?               @db.VarChar(100)
   clo_text            String                @db.Text
   embedding           String?               @db.Text
   created_at          DateTime              @default(now()) @db.Timestamp(0)
   application_matches application_matches[]
   clo_skills          clo_skills[]
-  matkul              matkul?               @relation(fields: [matkul_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  subject             subject?               @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
   student_clos        student_clos[]
 
-  @@index([matkul_id])
+  @@index([subject_id])
 }
 
 model companies {
@@ -127,14 +127,14 @@ model courses {
 
 model curriculum_versions {
   id         String   @id @default(ulid())
-  prodi_id   String   @db.Char(36)
+  major_id   String   @db.Char(36)
   year       Int
   active     Boolean? @default(false)
   created_at DateTime @default(now()) @db.Timestamp(0)
-  prodi      prodi    @relation(fields: [prodi_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
-  matkul     matkul[]
+  major      major    @relation(fields: [major_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  subject    subject[]
 
-  @@index([prodi_id])
+  @@index([major_id])
 }
 
 model grade_scale {
@@ -198,22 +198,22 @@ model jobs {
   @@index([hr_id])
 }
 
-model matkul {
+model subject {
   id                    String               @id @default(ulid())
   kode                  String               @unique(map: "kode") @db.VarChar(50)
   nama                  String               @db.VarChar(255)
   sks                   Int?
   semester              Int?
   deskripsi             String?              @db.Text
-  prodi_id              String?              @db.Char(36)
+  major_id              String?              @db.Char(36)
   curriculum_version_id String?              @db.Char(36)
   created_at            DateTime             @default(now()) @db.Timestamp(0)
   clos                  clos[]
   curriculum_versions   curriculum_versions? @relation(fields: [curriculum_version_id], references: [id], onUpdate: Restrict)
-  prodi                 prodi?               @relation(fields: [prodi_id], references: [id], onUpdate: Restrict)
+  major                 major?             @relation(fields: [major_id], references: [id], onUpdate: Restrict)
 
   @@index([curriculum_version_id])
-  @@index([prodi_id])
+  @@index([major_id])
 }
 
 model notifications {
@@ -228,7 +228,7 @@ model notifications {
   @@index([user_id])
 }
 
-model prodi {
+model major {
   id                  String                @id @default(ulid())
   name                String                @unique() @db.VarChar(255)
   fakultas            String?               @db.VarChar(255)
@@ -236,7 +236,7 @@ model prodi {
   created_at          DateTime              @default(now()) @db.Timestamp(0)
   admin_users         admin_users[]
   curriculum_versions curriculum_versions[]
-  matkul              matkul[]
+  subject             subject[]
   students            students[]
 }
 
@@ -358,7 +358,7 @@ model students {
   user_id            String?              @unique() @db.Char(36)
   nim                String               @unique() @db.VarChar(50)
   name               String               @db.VarChar(255)
-  prodi_id           String?              @db.Char(36)
+  major_id           String?              @db.Char(36)
   angkatan           Int?
   status             students_status?     @default(active)
   email              String?              @db.VarChar(255)
@@ -375,11 +375,11 @@ model students {
   student_courses    student_courses[]
   student_skill_map  student_skill_map[]
   student_targets    student_targets[]
-  prodi              prodi?               @relation(fields: [prodi_id], references: [id], onUpdate: Restrict)
+  major              major?               @relation(fields: [major_id], references: [id], onUpdate: Restrict)
   users              users?               @relation(fields: [user_id], references: [id], onUpdate: Restrict)
   talent_invitations talent_invitations[]
 
-  @@index([prodi_id], map: "fk_students_prodi")
+  @@index([major_id])
 }
 
 model system_logs {
