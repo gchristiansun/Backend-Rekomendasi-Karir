@@ -7,6 +7,7 @@ import jobRouter from "../modules/job/job.routes";
 import matchingRouter from "../modules/matching/matching.routes";
 import applicationRouter from "../modules/application/application.routes";
 import subjectRouter from "../modules/subject/subject.routes";
+import notificationRouter from "../modules/notification/notification.routes";
 
 const mainApiRouter = Router();
 
@@ -18,5 +19,6 @@ mainApiRouter.use("/jobs", jobRouter);
 mainApiRouter.use("/matching", matchingRouter);
 mainApiRouter.use("/applications", applicationRouter);
 mainApiRouter.use("/subjects", subjectRouter);
+mainApiRouter.use("/notifications", notificationRouter);
 
 export default mainApiRouter;
