@@ -44,7 +44,7 @@ model University {
 
     members  UniversityMember[]
     students Student[]
-    courses  Course[]
+    subjects Subject[]
 }
 
 model UniversityMember {
@@ -76,7 +76,7 @@ model Student {
     university University? @relation(fields: [universityId], references: [id], onDelete: SetNull)
 
     skills       StudentSkill[]
-    coursesTaken CourseTaken[]
+    subjectsTaken SubjectTaken[]
     certificates Certificate[]
     applications Application[]
 
@@ -122,7 +122,7 @@ model Skill {
 
     studentSkills StudentSkill[]
     jobSkills     JobSkill[]
-    courseSkills  CourseSkill[]
+    subjectSkills SubjectSkill[]
     onlineSkills  OnlineCourseSkill[]
     certSkills    CertificateSkill[]
 }
@@ -141,7 +141,7 @@ model StudentSkill {
     @@index([skillId])
 }
 
-model Course {
+model Subject {
     id           String   @id @default(ulid())
     universityId String?
     code         String?
@@ -153,53 +153,53 @@ model Course {
     updated_at   DateTime @updatedAt
 
     university University?    @relation(fields: [universityId], references: [id], onDelete: SetNull)
-    skills     CourseSkill[]
-    takenBy    CourseTaken[]
+    skills     SubjectSkill[]
+    takenBy    SubjectTaken[]
     clos       CLO[]
 
     @@index([universityId])
 }
 
-model CourseSkill {
-    id       String @id @default(ulid())
-    courseId String
-    skillId  String
+model SubjectSkill {
+    id        String @id @default(ulid())
+    subjectId String
+    skillId   String
 
-    course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-    skill  Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+    subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+    skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-    @@unique([courseId, skillId])
+    @@unique([subjectId, skillId])
     @@index([skillId])
 }
 
-model CourseTaken {
+model SubjectTaken {
     id         String   @id @default(ulid())
     studentId  String
-    courseId   String
+    subjectId  String
     score      Float?
     grade      String?
     semester   Int?
     created_at DateTime @default(now())
 
     student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-    course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+    subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
-    @@unique([studentId, courseId])
-    @@index([courseId])
+    @@unique([studentId, subjectId])
+    @@index([subjectId])
 }
 
 model CLO {
-    id             String   @id @default(ulid())
-    courseId       String
-    code           String?  // mis. "CLO 1"
-    text           String   // clo_text (rincian capaian+indikator+materi)
-    paraphrase     String?  // clo_paraphrase (ringkasan)
-    embedding      String?  // vektor 1024-dim disimpan sebagai JSON string
-    created_at     DateTime @default(now())
+    id         String   @id @default(ulid())
+    subjectId  String
+    code       String?
+    text       String
+    paraphrase String?
+    embedding  String?
+    created_at DateTime @default(now())
 
-    course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+    subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
-    @@index([courseId])
+    @@index([subjectId])
 }
 
 model OnlineCourse {

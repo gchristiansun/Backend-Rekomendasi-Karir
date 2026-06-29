@@ -1,0 +1,89 @@
+tags:
+  - name: SUBJECT
+    description: API mata kuliah & kurikulum (OBE)
+
+/api/subjects:
+  get:
+    summary: Daftar mata kuliah
+    tags:
+      - SUBJECT
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Daftar mata kuliah berhasil diambil
+      401:
+        description: Tidak terautentikasi
+  post:
+    summary: Buat mata kuliah baru
+    tags:
+      - SUBJECT
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - name
+            properties:
+              code:
+                type: string
+                example: "IF2101"
+              name:
+                type: string
+                example: "Pemrograman Dasar"
+              sks:
+                type: integer
+                example: 3
+              semester:
+                type: integer
+                example: 1
+              skills:
+                type: array
+                items:
+                  type: string
+                example: ["Python", "Problem Solving"]
+    responses:
+      201:
+        description: Mata kuliah dibuat
+      403:
+        description: Tidak punya akses (hanya Admin Kampus/Admin)
+
+/api/subjects/{id}:
+  get:
+    summary: Detail mata kuliah
+    tags:
+      - SUBJECT
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      200:
+        description: Detail mata kuliah
+      404:
+        description: Mata kuliah tidak ditemukan
+
+/api/subjects/{id}/clos:
+  get:
+    summary: Daftar CLO (capaian pembelajaran) mata kuliah
+    tags:
+      - SUBJECT
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      200:
+        description: Daftar CLO berhasil diambil

@@ -1,22 +1,21 @@
 import prisma from "../../config/prisma";
-import { CreateCourseInput, UpdateCourseInput } from "./course.validation";
+import { CreateSubjectInput, UpdateSubjectInput } from "./subject.validation";
 import { findOrCreateByNames } from "../skill/skill.service";
 
-// Bentuk response matkul yang rapi (skills jadi array {id,name}).
-const shape = (c: any) => ({
-  id: c.id,
-  code: c.code,
-  name: c.name,
-  sks: c.sks,
-  semester: c.semester,
-  rps: c.rps,
-  university: c.university,
-  skills: c.skills.map((cs: any) => cs.skill),
-  cloCount: c._count?.clos ?? undefined,
+const shape = (s: any) => ({
+  id: s.id,
+  code: s.code,
+  name: s.name,
+  sks: s.sks,
+  semester: s.semester,
+  rps: s.rps,
+  university: s.university,
+  skills: s.skills.map((ss: any) => ss.skill),
+  cloCount: s._count?.clos ?? undefined,
 });
 
-export const listCourses = async (universityId?: string) => {
-  const courses = await prisma.course.findMany({
+export const listSubjects = async (universityId?: string) => {
+  const subjects = await prisma.subject.findMany({
     where: universityId ? { universityId } : undefined,
     include: {
       skills: { include: { skill: { select: { id: true, name: true } } } },
@@ -25,11 +24,11 @@ export const listCourses = async (universityId?: string) => {
     },
     orderBy: [{ semester: "asc" }, { name: "asc" }],
   });
-  return courses.map(shape);
+  return subjects.map(shape);
 };
 
-export const getCourseById = async (id: string) => {
-  const c = await prisma.course.findUnique({
+export const getSubjectById = async (id: string) => {
+  const s = await prisma.subject.findUnique({
     where: { id },
     include: {
       skills: { include: { skill: { select: { id: true, name: true } } } },
@@ -37,21 +36,20 @@ export const getCourseById = async (id: string) => {
       _count: { select: { clos: true } },
     },
   });
-  return c ? shape(c) : null;
+  return s ? shape(s) : null;
 };
 
-// CLO milik sebuah matkul (tanpa embedding -> embedding besar, tidak perlu di response biasa).
-export const getCourseCLOs = async (courseId: string) => {
+export const getSubjectCLOs = async (subjectId: string) => {
   return prisma.cLO.findMany({
-    where: { courseId },
+    where: { subjectId },
     select: { id: true, code: true, text: true, paraphrase: true },
     orderBy: { code: "asc" },
   });
 };
 
-export const createCourse = async (universityId: string | null, data: CreateCourseInput) => {
+export const createSubject = async (universityId: string | null, data: CreateSubjectInput) => {
   const skills = await findOrCreateByNames(data.skills ?? []);
-  const c = await prisma.course.create({
+  const s = await prisma.subject.create({
     data: {
       code: data.code,
       name: data.name,
@@ -59,23 +57,23 @@ export const createCourse = async (universityId: string | null, data: CreateCour
       semester: data.semester,
       rps: data.rps,
       universityId: universityId ?? data.universityId ?? null,
-      skills: { create: skills.map((s) => ({ skillId: s.id })) },
+      skills: { create: skills.map((sk) => ({ skillId: sk.id })) },
     },
     include: {
       skills: { include: { skill: { select: { id: true, name: true } } } },
       university: { select: { id: true, name: true } },
     },
   });
-  return shape(c);
+  return shape(s);
 };
 
-export const updateCourse = async (id: string, data: UpdateCourseInput) => {
+export const updateSubject = async (id: string, data: UpdateSubjectInput) => {
   let skillOps: any = undefined;
   if (data.skills) {
     const skills = await findOrCreateByNames(data.skills);
-    skillOps = { deleteMany: {}, create: skills.map((s) => ({ skillId: s.id })) };
+    skillOps = { deleteMany: {}, create: skills.map((sk) => ({ skillId: sk.id })) };
   }
-  const c = await prisma.course.update({
+  const s = await prisma.subject.update({
     where: { id },
     data: {
       code: data.code,
@@ -90,7 +88,7 @@ export const updateCourse = async (id: string, data: UpdateCourseInput) => {
       university: { select: { id: true, name: true } },
     },
   });
-  return shape(c);
+  return shape(s);
 };
 
-export const deleteCourse = (id: string) => prisma.course.delete({ where: { id } });
+export const deleteSubject = (id: string) => prisma.subject.delete({ where: { id } });
