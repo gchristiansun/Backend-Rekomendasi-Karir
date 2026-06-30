@@ -23,5 +23,16 @@ export const loginUserSchema = z.object({
   password: z.string().min(1, "Password wajib diisi"),
 });
 
+export const changePasswordSchema = z
+  .object({
+    oldPassword: z.string().min(1, "Password lama wajib diisi"),
+    newPassword: z.string().min(8, "Password baru minimal 8 karakter"),
+  })
+  .refine((data) => data.oldPassword !== data.newPassword, {
+    message: "Password baru harus berbeda dari password lama",
+    path: ["newPassword"],
+  });
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type RegisterUserInput = z.infer<typeof registerUserSchema>;
 export type LoginUserInput = z.infer<typeof loginUserSchema>;

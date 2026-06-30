@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import * as authService from "./auth.service";
 import { HttpError } from "../../utils/httpError";
-import { comparePassword } from "../../utils/password";
+import { comparePassword, hashPassword } from "../../utils/password";
 import {
   signAccessToken,
   signRefreshToken,
@@ -12,6 +12,7 @@ import { UserPayload } from "../../middleware/auth.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { sendCreated, sendSuccess } from "../../utils/apiResponse";
 import { ROLES, USER_STATUS } from "../../constants";
+import { ChangePasswordInput } from "./auth.validation";
 
 const REFRESH_COOKIE = "refreshToken";
 const refreshCookieOptions = {
@@ -119,3 +120,23 @@ export const meHandler = asyncHandler(async (req: Request, res: Response) => {
   if (!me) throw new HttpError(404, "User tidak ditemukan");
   return sendSuccess(res, me, "Profil pengguna");
 });
+
+export const changePasswordHandler = asyncHandler(
+  async (req: Request<{}, {}, ChangePasswordInput>, res: Response) => {
+    const { oldPassword, newPassword } = req.body;
+
+    const user = await authService.findUserById(req.user!.id);
+    if (!user || !user.password) {
+      throw new HttpError(404, "User tidak ditemukan");
+    }
+
+    // verifikasi password lama
+    const valid = await comparePassword(oldPassword, user.password);
+    if (!valid) throw new HttpError(401, "Password lama salah");
+
+    const hashed = await hashPassword(newPassword);
+    await authService.updatePassword(user.id, hashed);
+
+    return sendSuccess(res, null, "Password berhasil diubah");
+  },
+);

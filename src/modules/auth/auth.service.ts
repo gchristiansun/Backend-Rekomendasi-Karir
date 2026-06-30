@@ -111,3 +111,14 @@ export const getMe = async (userId: string) => {
     },
   });
 };
+
+// Ambil user (termasuk password) untuk verifikasi ganti password.
+export const findUserById = (id: string) =>
+  prisma.user.findUnique({ where: { id } });
+
+// Update password (sudah di-hash di controller).
+export const updatePassword = (userId: string, hashedPassword: string) =>
+  prisma.user.update({
+    where: { id: userId },
+    data: { password: hashedPassword },
+  });
