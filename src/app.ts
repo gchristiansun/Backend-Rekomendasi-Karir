@@ -7,6 +7,7 @@ import mainApiRouter from "./routes";
 import { HttpError } from "./utils/httpError";
 import { errorHandler } from "./middleware/errorHandler";
 import { setupSwagger } from "./config/swagger";
+import path from "path";
 
 const app: Application = express();
 
@@ -24,6 +25,8 @@ app.use(express.json());
 app.use(urlencoded({ extended: true }));
 app.use(morgan('dev'));
 app.use(cookieParser());
+//upload file static
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 app.get('/health', (req: Request, res: Response) => {
     res.status(200).json({

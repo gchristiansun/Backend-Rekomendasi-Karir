@@ -8,6 +8,7 @@ import matchingRouter from "../modules/matching/matching.routes";
 import applicationRouter from "../modules/application/application.routes";
 import subjectRouter from "../modules/subject/subject.routes";
 import notificationRouter from "../modules/notification/notification.routes";
+import certificateRouter from "../modules/certificate/certificate.routes";
 
 const mainApiRouter = Router();
 
@@ -20,5 +21,6 @@ mainApiRouter.use("/matching", matchingRouter);
 mainApiRouter.use("/applications", applicationRouter);
 mainApiRouter.use("/subjects", subjectRouter);
 mainApiRouter.use("/notifications", notificationRouter);
+mainApiRouter.use("/certificates", certificateRouter);
 
 export default mainApiRouter;
