@@ -13,6 +13,7 @@ export const USER_STATUS = {
     ACTIVE: "active",
     PENDING: "pending",
     SUSPENDED: "suspended",
+    DELETED: "deleted",
 } as const;
 export type UserStatus = (typeof USER_STATUS)[keyof typeof USER_STATUS];
 
@@ -85,3 +86,6 @@ export const NOTIFICATION_TYPE = {
     CERTIFICATE: "certificate",
     SYSTEM: "system",
 } as const;
+
+// Batas nilai kelulusan. Nilai >= ini -> lulus -> skill matkul diberikan ke mahasiswa.
+export const PASSING_SCORE = 50;

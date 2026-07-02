@@ -11,8 +11,8 @@ export const getStudentProfile = async (studentId: string) => {
       user: { select: { id: true, name: true, email: true, phone: true } },
       university: { select: { id: true, name: true } },
       skills: { include: { skill: { select: { id: true, name: true, category: true } } } },
-      coursesTaken: {
-        include: { course: { select: { id: true, code: true, name: true, sks: true } } },
+      subjectsTaken: {
+        include: { subject: { select: { id: true, code: true, name: true, sks: true } } },
         orderBy: { semester: "asc" },
       },
       certificates: {

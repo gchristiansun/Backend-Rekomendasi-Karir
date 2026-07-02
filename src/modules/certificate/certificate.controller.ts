@@ -5,6 +5,8 @@ import { sendSuccess, sendCreated } from "../../utils/apiResponse";
 import { getStudentByUserId, getUniversityMembership } from "../../utils/context";
 import { HttpError } from "../../utils/httpError";
 import { ROLES } from "../../constants";
+import { supabase, SUPABASE_BUCKET } from "../../config/supabase";
+import { randomUUID } from "crypto";
 import path from "path";
 
 // Parse field "skills" dari multipart (bisa JSON array ATAU dipisah koma).
@@ -30,8 +32,34 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
   if (!title) throw new HttpError(400, "Judul sertifikat wajib diisi");
 
   const file = req.file;
-  const fileUrl = file ? `/uploads/certificates/${file.filename}` : undefined;
-  const fileType = file ? path.extname(file.originalname).replace(".", "").toLowerCase() : undefined;
+  let fileUrl: string | undefined;
+  let fileType: string | undefined;
+
+  if (file) {
+    // nama file unik di bucket: certificates/<studentId>/<uuid>.<ext>
+    const ext = file.originalname.split(".").pop()?.toLowerCase() ?? "bin";
+    const objectPath = `${student.id}/${randomUUID()}.${ext}`;
+
+    // unggah buffer ke Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .upload(objectPath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new HttpError(500, `Gagal mengunggah file: ${uploadError.message}`);
+    }
+
+    // ambil URL publik (bucket harus Public)
+    const { data: publicData } = supabase.storage
+      .from(SUPABASE_BUCKET)
+      .getPublicUrl(objectPath);
+
+    fileUrl = publicData.publicUrl;
+    fileType = ext;
+  }
 
   const cert = await certService.createCertificate({
     studentId: student.id,

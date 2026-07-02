@@ -26,7 +26,7 @@ app.use(urlencoded({ extended: true }));
 app.use(morgan('dev'));
 app.use(cookieParser());
 //upload file static
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+// app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 app.get('/health', (req: Request, res: Response) => {
     res.status(200).json({

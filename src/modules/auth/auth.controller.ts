@@ -61,6 +61,9 @@ export const loginUserHandler = asyncHandler(
     if (user.status === USER_STATUS.SUSPENDED) {
       throw new HttpError(403, "Akun Anda telah dinonaktifkan. Hubungi admin.");
     }
+    if (user.status === USER_STATUS.DELETED) {
+      throw new HttpError(403, "Akun tidak ditemukan.");
+    }
 
     const valid = await comparePassword(password, user.password);
     if (!valid) throw new HttpError(401, "Email atau password salah");
