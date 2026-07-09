@@ -23,7 +23,7 @@ export const getStudentProfile = async (studentId: string) => {
 };
 
 // Profil kompetensi (untuk halaman Competency Profile).
-// Mengelompokkan skill berdasarkan sumbernya: course / certificate / manual.
+// Mengelompokkan skill berdasarkan sumbernya: subject / certificate / manual.
 export const getCompetency = async (studentId: string) => {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
@@ -35,7 +35,7 @@ export const getCompetency = async (studentId: string) => {
     orderBy: { skill: { name: "asc" } },
   });
 
-  const bySource = { course: 0, certificate: 0, manual: 0 } as Record<string, number>;
+  const bySource = { subject: 0, certificate: 0, manual: 0 } as Record<string, number>;
   for (const s of skills) bySource[s.source] = (bySource[s.source] ?? 0) + 1;
 
   return {

@@ -13,6 +13,7 @@ import userRouter from "../modules/user/user.routes";
 import importRouter from "../modules/import/import.routes";
 import gradeRouter from "../modules/grade/grade.routes";
 import analyticsRouter from "../modules/analytics/analytics.routes";
+import recommendationRouter from "../modules/recommendation/recommendation.routes";
 
 const mainApiRouter = Router();
 
@@ -30,5 +31,6 @@ mainApiRouter.use("/users", userRouter);
 mainApiRouter.use("/import", importRouter);
 mainApiRouter.use("/grades", gradeRouter);
 mainApiRouter.use("/analytics", analyticsRouter);
+mainApiRouter.use("/recommendation", recommendationRouter);
 
 export default mainApiRouter;

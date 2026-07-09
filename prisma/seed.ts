@@ -193,7 +193,7 @@ async function main() {
   // ==========================================================================
   // 6. LOWONGAN (di TechCorp yang verified) + skill berbobot
   // ==========================================================================
-  console.log("💼 Membuat lowongan...");
+  console.log(" Membuat lowongan...");
   const jobSeeds = [
     {
       title: "Backend Developer",
@@ -304,10 +304,8 @@ async function main() {
   }
   console.log(`   ✓ ${createdStudents.length} mahasiswa dibuat\n`);
 
-  // ==========================================================================
   // 8. LAMARAN DUMMY (biar ada data di modul application)
-  // ==========================================================================
-  console.log("📝 Membuat lamaran dummy...");
+  console.log("Membuat lamaran dummy...");
   // Mahasiswa Utama melamar Backend Developer
   await prisma.application.create({
     data: {
@@ -329,10 +327,8 @@ async function main() {
   });
   console.log("   ✓ 2 lamaran dummy dibuat\n");
 
-  // ==========================================================================
-  // 9. ONLINE COURSE DUMMY (untuk rekomendasi kursus nanti)
-  // ==========================================================================
-  console.log("📚 Membuat online course dummy...");
+  // ONLINE COURSE DUMMY (untuk rekomendasi kursus nanti)
+  console.log(" Membuat online course dummy");
   const courseSeeds = [
     { title: "Docker for Beginners", provider: "Udemy", level: "beginner", skills: ["Docker"] },
     { title: "Advanced React", provider: "Coursera", level: "intermediate", skills: ["React", "TypeScript"] },
@@ -351,7 +347,7 @@ async function main() {
   }
   console.log(`   ✓ ${courseSeeds.length} online course dibuat\n`);
 
-  console.log("✅ SEEDING SELESAI!\n");
+  console.log(" SEEDING SELESAI!\n");
   console.log("═".repeat(50));
   console.log("KREDENSIAL LOGIN DEFAULT:");
   console.log("═".repeat(50));
@@ -366,7 +362,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error("❌ Seeding gagal:", e);
+    console.error(" Seeding gagal:", e);
     process.exit(1);
   })
   .finally(async () => {
