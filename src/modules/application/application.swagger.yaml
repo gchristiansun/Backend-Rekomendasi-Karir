@@ -1,0 +1,94 @@
+tags:
+  - name: APPLICATION
+    description: API lamaran pekerjaan
+
+/api/applications:
+  post:
+    summary: Melamar lowongan (mahasiswa)
+    tags: [APPLICATION]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [jobId]
+            properties:
+              jobId: { type: string }
+              coverLetter: { type: string, example: "Saya tertarik dengan posisi ini." }
+    responses:
+      201:
+        description: Lamaran terkirim
+      409:
+        description: Sudah melamar lowongan ini
+
+/api/applications/me:
+  get:
+    summary: Riwayat lamaran mahasiswa
+    tags: [APPLICATION]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Daftar lamaran + statusLabel
+
+/api/applications/{id}:
+  delete:
+    summary: Batalkan lamaran (mahasiswa)
+    tags: [APPLICATION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Lamaran dibatalkan
+      400:
+        description: Lamaran sudah diproses tidak bisa dibatalkan
+
+/api/applications/job/{jobId}:
+  get:
+    summary: Daftar pelamar lowongan (HRD)
+    tags: [APPLICATION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Daftar pelamar terurut match score
+
+/api/applications/{id}/status:
+  patch:
+    summary: Ubah status lamaran (HRD)
+    tags: [APPLICATION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status]
+            properties:
+              status:
+                type: string
+                enum: [processing, accepted, rejected]
+                example: "accepted"
+    responses:
+      200:
+        description: Status lamaran diperbarui

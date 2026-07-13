@@ -1,0 +1,116 @@
+tags:
+  - name: JOB
+    description: API lowongan pekerjaan
+
+/api/jobs:
+  get:
+    summary: Daftar lowongan aktif
+    tags: [JOB]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: search
+        in: query
+        schema: { type: string }
+      - name: type
+        in: query
+        schema: { type: string, example: "fulltime" }
+    responses:
+      200:
+        description: Daftar lowongan aktif
+  post:
+    summary: Buat lowongan baru (HRD, perusahaan harus verified)
+    tags: [JOB]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [title, description, skills]
+            properties:
+              title: { type: string, example: "Backend Developer" }
+              description: { type: string, example: "Membangun REST API dengan Node.js" }
+              location: { type: string, example: "Jakarta" }
+              type: { type: string, example: "fulltime" }
+              salaryMin: { type: integer }
+              salaryMax: { type: integer }
+              skills:
+                type: array
+                items: { type: string }
+                example: ["Node.js", "PostgreSQL", "Docker"]
+    responses:
+      201:
+        description: Lowongan dibuat
+      403:
+        description: Perusahaan belum diverifikasi / bukan HRD
+
+/api/jobs/mine:
+  get:
+    summary: Lowongan milik perusahaan (HRD)
+    tags: [JOB]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Daftar lowongan perusahaan
+
+/api/jobs/{id}:
+  get:
+    summary: Detail lowongan
+    tags: [JOB]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Detail lowongan
+      404:
+        description: Lowongan tidak ditemukan
+  patch:
+    summary: Update lowongan (HRD, pemilik)
+    tags: [JOB]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Lowongan diperbarui
+  delete:
+    summary: Hapus lowongan (HRD, pemilik)
+    tags: [JOB]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Lowongan dihapus
+
+/api/jobs/{id}/close:
+  patch:
+    summary: Tutup lowongan (HRD, pemilik)
+    tags: [JOB]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Lowongan ditutup

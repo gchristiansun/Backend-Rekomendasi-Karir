@@ -1,0 +1,92 @@
+tags:
+  - name: COMPANY
+    description: API perusahaan & verifikasi
+
+/api/companies/me:
+  get:
+    summary: Profil perusahaan sendiri + statistik (Direktur/HRD)
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Profil perusahaan + dashboard stats
+  patch:
+    summary: Update profil perusahaan
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name: { type: string }
+              industry: { type: string }
+              description: { type: string }
+              website: { type: string, example: "https://techcorp.com" }
+    responses:
+      200:
+        description: Profil perusahaan diperbarui
+
+/api/companies:
+  get:
+    summary: Daftar perusahaan (Admin Utama)
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: status
+        in: query
+        schema: { type: string, example: "pending" }
+    responses:
+      200:
+        description: Daftar perusahaan
+
+/api/companies/{id}/verify:
+  patch:
+    summary: Verifikasi perusahaan (Admin Utama)
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Perusahaan diverifikasi
+
+/api/companies/{id}/reject:
+  patch:
+    summary: Tolak perusahaan (Admin Utama)
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Perusahaan ditolak
+
+/api/companies/{id}:
+  get:
+    summary: Detail perusahaan (Admin Utama)
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Detail perusahaan
+      404:
+        description: Perusahaan tidak ditemukan

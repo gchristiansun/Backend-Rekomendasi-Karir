@@ -1,0 +1,63 @@
+tags:
+  - name: SKILL
+    description: API master data skill
+
+/api/skills:
+  get:
+    summary: Daftar skill (semua user login)
+    tags: [SKILL]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: search
+        in: query
+        schema: { type: string }
+    responses:
+      200:
+        description: Daftar skill
+  post:
+    summary: Buat skill baru (Admin/Admin Kampus)
+    tags: [SKILL]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, example: "Kubernetes" }
+              category: { type: string, example: "DevOps" }
+    responses:
+      201:
+        description: Skill dibuat
+
+/api/skills/{id}:
+  patch:
+    summary: Update skill (Admin/Admin Kampus)
+    tags: [SKILL]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Skill diperbarui
+  delete:
+    summary: Hapus skill (Admin)
+    tags: [SKILL]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Skill dihapus

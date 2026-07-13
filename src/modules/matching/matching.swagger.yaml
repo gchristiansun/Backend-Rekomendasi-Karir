@@ -1,0 +1,51 @@
+tags:
+  - name: MATCHING
+    description: API pencocokan skill (rekomendasi lowongan & kandidat)
+
+/api/matching/jobs:
+  get:
+    summary: Rekomendasi lowongan untuk mahasiswa (terurut match score)
+    tags: [MATCHING]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: search
+        in: query
+        schema: { type: string }
+    responses:
+      200:
+        description: Daftar lowongan + matchScore + gapSkills
+
+/api/matching/jobs/{jobId}:
+  get:
+    summary: Detail kecocokan & skill gap satu lowongan
+    tags: [MATCHING]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: matchScore, matchedSkills, gapSkills
+      404:
+        description: Lowongan tidak ditemukan
+
+/api/matching/candidates/{jobId}:
+  get:
+    summary: Kandidat mahasiswa untuk lowongan (HRD, terurut skor)
+    tags: [MATCHING]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Daftar kandidat terurut match score
+      403:
+        description: Bukan lowongan perusahaan Anda

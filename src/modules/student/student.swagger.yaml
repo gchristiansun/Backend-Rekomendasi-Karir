@@ -1,0 +1,123 @@
+tags:
+  - name: STUDENT
+    description: API profil & kompetensi mahasiswa
+
+/api/students/me:
+  get:
+    summary: Profil mahasiswa yang login
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Profil mahasiswa berhasil diambil
+      401:
+        description: Tidak terautentikasi
+  patch:
+    summary: Update profil mahasiswa
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              major: { type: string, example: "Teknik Informatika" }
+              semester: { type: integer, example: 6 }
+              gpa: { type: number, example: 3.5 }
+              bio: { type: string }
+              nim: { type: string, example: "123140001" }
+    responses:
+      200:
+        description: Profil diperbarui
+
+/api/students/me/competency:
+  get:
+    summary: Profil kompetensi (skill dikelompokkan per sumber)
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Profil kompetensi berhasil diambil
+
+/api/students/me/skills:
+  get:
+    summary: Daftar skill mahasiswa
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Daftar skill berhasil diambil
+  post:
+    summary: Tambah skill manual
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [skills]
+            properties:
+              skills:
+                type: array
+                items: { type: string }
+                example: ["React", "Docker"]
+    responses:
+      200:
+        description: Skill ditambahkan
+
+/api/students/me/skills/{skillId}:
+  delete:
+    summary: Hapus skill mahasiswa
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: skillId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Skill dihapus
+
+/api/students:
+  get:
+    summary: Daftar mahasiswa (admin/kampus/perusahaan)
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: search
+        in: query
+        schema: { type: string }
+      - name: page
+        in: query
+        schema: { type: integer }
+    responses:
+      200:
+        description: Daftar mahasiswa
+
+/api/students/{id}:
+  get:
+    summary: Detail mahasiswa by id
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Detail mahasiswa
+      404:
+        description: Mahasiswa tidak ditemukan

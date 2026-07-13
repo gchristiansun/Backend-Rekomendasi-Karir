@@ -1,0 +1,82 @@
+tags:
+  - name: CERTIFICATE
+    description: API sertifikat mahasiswa (upload & verifikasi)
+
+/api/certificates:
+  post:
+    summary: Upload sertifikat (mahasiswa, multipart/form-data)
+    tags: [CERTIFICATE]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [title, file]
+            properties:
+              title: { type: string, example: "Sertifikat AWS" }
+              issuer: { type: string, example: "Amazon" }
+              skills: { type: string, example: "AWS,Cloud Computing" }
+              file: { type: string, format: binary }
+    responses:
+      201:
+        description: Sertifikat diunggah, menunggu verifikasi
+
+/api/certificates/me:
+  get:
+    summary: Sertifikat milik mahasiswa
+    tags: [CERTIFICATE]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Daftar sertifikat
+
+/api/certificates/pending:
+  get:
+    summary: Ajuan sertifikat menunggu verifikasi (Admin Kampus)
+    tags: [CERTIFICATE]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Daftar sertifikat pending
+
+/api/certificates/{id}/approve:
+  patch:
+    summary: Setujui sertifikat (skill masuk ke kompetensi mahasiswa)
+    tags: [CERTIFICATE]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Sertifikat disetujui
+
+/api/certificates/{id}/reject:
+  patch:
+    summary: Tolak sertifikat (Admin Kampus)
+    tags: [CERTIFICATE]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              note: { type: string, example: "Sertifikat tidak valid" }
+    responses:
+      200:
+        description: Sertifikat ditolak

@@ -1,0 +1,62 @@
+tags:
+  - name: GRADE
+    description: API nilai mahasiswa (memicu skill OBE)
+
+/api/grades:
+  post:
+    summary: Input nilai mahasiswa (jika lulus, skill matkul masuk ke kompetensi)
+    tags: [GRADE]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [studentId, subjectId]
+            properties:
+              studentId: { type: string }
+              subjectId: { type: string }
+              score: { type: number, example: 85 }
+              grade: { type: string, example: "A" }
+              semester: { type: integer, example: 5 }
+    responses:
+      201:
+        description: Nilai diinput (passing, skillsGranted)
+      404:
+        description: Mahasiswa / mata kuliah tidak ditemukan
+
+/api/grades/student/{studentId}:
+  get:
+    summary: Daftar nilai seorang mahasiswa
+    tags: [GRADE]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: studentId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Daftar nilai mahasiswa
+
+/api/grades/student/{studentId}/subject/{subjectId}:
+  delete:
+    summary: Hapus nilai mahasiswa untuk sebuah matkul
+    tags: [GRADE]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: studentId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: subjectId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Nilai dihapus

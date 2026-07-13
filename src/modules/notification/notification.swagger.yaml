@@ -1,0 +1,50 @@
+tags:
+  - name: NOTIFICATION
+    description: API notifikasi pengguna
+
+/api/notifications:
+  get:
+    summary: Daftar notifikasi pengguna yang login
+    tags: [NOTIFICATION]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Daftar notifikasi
+
+/api/notifications/unread-count:
+  get:
+    summary: Jumlah notifikasi belum dibaca
+    tags: [NOTIFICATION]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Jumlah unread
+
+/api/notifications/read-all:
+  patch:
+    summary: Tandai semua notifikasi dibaca
+    tags: [NOTIFICATION]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Semua notifikasi ditandai dibaca
+
+/api/notifications/{id}/read:
+  patch:
+    summary: Tandai satu notifikasi dibaca
+    tags: [NOTIFICATION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Notifikasi ditandai dibaca
+      404:
+        description: Notifikasi tidak ditemukan

@@ -1,0 +1,109 @@
+tags:
+  - name: USER
+    description: API kelola pengguna (Admin Utama)
+
+/api/users:
+  get:
+    summary: Daftar semua pengguna (Admin Utama)
+    tags: [USER]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: role
+        in: query
+        schema: { type: string, example: "student" }
+      - name: status
+        in: query
+        schema: { type: string, example: "active" }
+      - name: search
+        in: query
+        schema: { type: string }
+    responses:
+      200:
+        description: Daftar pengguna
+
+/api/users/university-admin:
+  post:
+    summary: Buat akun Admin Kampus (Admin Utama)
+    tags: [USER]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, email, password]
+            properties:
+              name: { type: string, example: "Admin Kampus Tel-U" }
+              email: { type: string, example: "kampus@telkom.ac.id" }
+              password: { type: string, example: "kampus123" }
+              universityId: { type: string, description: "Pakai universitas yang ada" }
+              universityName: { type: string, example: "Telkom University" }
+              universityCode: { type: string, example: "TELU" }
+    responses:
+      201:
+        description: Akun Admin Kampus dibuat
+      409:
+        description: Email sudah terdaftar
+
+/api/users/{id}:
+  get:
+    summary: Detail pengguna (Admin Utama)
+    tags: [USER]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Detail pengguna
+      404:
+        description: Pengguna tidak ditemukan
+  delete:
+    summary: Soft-delete pengguna (Admin Utama)
+    tags: [USER]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Pengguna dihapus (soft-delete)
+
+/api/users/{id}/suspend:
+  patch:
+    summary: Suspend pengguna (Admin Utama)
+    tags: [USER]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Pengguna disuspend
+
+/api/users/{id}/activate:
+  patch:
+    summary: Aktifkan kembali pengguna (Admin Utama)
+    tags: [USER]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Pengguna diaktifkan kembali

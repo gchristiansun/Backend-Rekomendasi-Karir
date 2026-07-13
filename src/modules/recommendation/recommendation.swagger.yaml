@@ -1,0 +1,30 @@
+tags:
+  - name: RECOMMENDATION
+    description: API rekomendasi kursus (penutup skill gap)
+
+/api/recommendation/courses:
+  get:
+    summary: Rekomendasi kursus untuk menutup semua skill gap mahasiswa
+    tags: [RECOMMENDATION]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: gapSkills + recommendedCourses
+
+/api/recommendation/courses/job/{jobId}:
+  get:
+    summary: Rekomendasi kursus untuk menutup gap satu lowongan
+    tags: [RECOMMENDATION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: matchScore + gapSkills + recommendedCourses
+      404:
+        description: Lowongan tidak ditemukan

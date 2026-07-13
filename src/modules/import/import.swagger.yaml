@@ -1,0 +1,50 @@
+tags:
+  - name: IMPORT
+    description: API import mahasiswa (Admin Kampus)
+
+/api/import/students:
+  post:
+    summary: Tambah 1 mahasiswa manual (password default = NIM)
+    tags: [IMPORT]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, email, nim]
+            properties:
+              name: { type: string, example: "Budi Mahasiswa" }
+              email: { type: string, example: "budi@student.com" }
+              nim: { type: string, example: "123140099" }
+              major: { type: string, example: "Sistem Informasi" }
+              semester: { type: integer, example: 5 }
+    responses:
+      201:
+        description: Mahasiswa ditambahkan
+      409:
+        description: Email / NIM sudah terdaftar
+
+/api/import/students/csv:
+  post:
+    summary: Import massal mahasiswa dari CSV (multipart/form-data)
+    tags: [IMPORT]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [file]
+            properties:
+              file:
+                type: string
+                format: binary
+                description: "CSV kolom: name, email, nim, major, semester"
+    responses:
+      200:
+        description: Import selesai (createdCount, skipped, dll)
