@@ -121,9 +121,13 @@ export const getApplicationWithJob = (id: string) =>
 
 // HRD ubah status + notif ke mahasiswa
 export const updateStatus = async (id: string, status: ApplicationStatus) => {
+  // lamaran yang sudah diterima/ditolak -> disembunyikan dari rekomendasi
+  const decided =
+    status === APPLICATION_STATUS.ACCEPTED || status === APPLICATION_STATUS.REJECTED;
+
   const app = await prisma.application.update({
     where: { id },
-    data: { status },
+    data: { status, hiddenFromRecommendation: decided },
     include: { job: { select: { title: true } }, student: true },
   });
 
@@ -143,3 +147,114 @@ export const updateStatus = async (id: string, status: ApplicationStatus) => {
 export const withdraw = async (id: string) => {
   await prisma.application.delete({ where: { id } });
 };
+
+// Tambahkan di bagian import atas file:
+// import { computeMatch } from "../../utils/matching";
+
+export const listCompanyApplications = async (
+  companyId: string,
+  opts: {
+    jobId?: string;
+    status?: string;
+    search?: string;
+    skip?: number;
+    take?: number;
+  },
+) => {
+  const where: any = { job: { companyId } };
+  if (opts.jobId) where.jobId = opts.jobId;
+  if (opts.status) where.status = opts.status;
+  if (opts.search) {
+    where.student = {
+      OR: [
+        { user: { name: { contains: opts.search, mode: "insensitive" } } },
+        { nim: { contains: opts.search, mode: "insensitive" } },
+        { major: { contains: opts.search, mode: "insensitive" } },
+      ],
+    };
+  }
+
+  const [total, rows, statusGroups] = await Promise.all([
+    prisma.application.count({ where }),
+    prisma.application.findMany({
+      where,
+      include: {
+        // skill lowongan dibutuhkan untuk menghitung skor kecocokan
+        job: {
+          include: { skills: { include: { skill: { select: { id: true, name: true } } } } },
+        },
+        student: {
+          include: {
+            user: { select: { id: true, name: true, email: true, phone: true } },
+            university: { select: { id: true, name: true } },
+            skills: { select: { skillId: true } },
+          },
+        },
+      },
+      orderBy: { created_at: "desc" },
+      ...(opts.skip !== undefined ? { skip: opts.skip } : {}),
+      ...(opts.take !== undefined ? { take: opts.take } : {}),
+    }),
+    prisma.application.groupBy({
+      by: ["status"],
+      where: { job: { companyId } },
+      _count: true,
+    }),
+  ]);
+
+  // Skor kecocokan tidak disimpan sebagai kolom -> dihitung di sini,
+  // pakai mesin yang sama dengan halaman rekomendasi kandidat.
+  const applications = rows
+    .map((app: any) => {
+      const owned = (app.student?.skills ?? []).map((s: any) => s.skillId);
+      const required = (app.job?.skills ?? []).map((js: any) => ({
+        skillId: js.skillId,
+        name: js.skill.name,
+        weight: js.weight,
+      }));
+      const match = computeMatch(owned, required);
+
+      return {
+        id: app.id,
+        status: app.status,
+        coverLetter: app.coverLetter,
+        created_at: app.created_at,
+        matchScore: match.score,
+        matchedSkills: match.matchedSkills,
+        gapSkills: match.missingSkills,
+        job: {
+          id: app.job.id,
+          title: app.job.title,
+          department: app.job.department,
+          type: app.job.type,
+          status: app.job.status,
+        },
+        student: {
+          id: app.student.id,
+          nim: app.student.nim,
+          major: app.student.major,
+          semester: app.student.semester,
+          user: app.student.user,
+          university: app.student.university,
+        },
+      };
+    })
+    // urut skor tertinggi (tidak bisa lewat orderBy karena bukan kolom DB)
+    .sort((a, b) => b.matchScore - a.matchScore);
+
+  const byStatus: Record<string, number> = {};
+  for (const g of statusGroups as any[]) byStatus[g.status] = g._count;
+
+  return {
+    total,
+    applications,
+    summary: {
+      total: Object.values(byStatus).reduce((a, b) => a + b, 0),
+      submitted: byStatus.submitted ?? 0,
+      processing: byStatus.processing ?? 0,
+      accepted: byStatus.accepted ?? 0,
+      rejected: byStatus.rejected ?? 0,
+    },
+  };
+};
+

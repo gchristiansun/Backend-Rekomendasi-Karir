@@ -15,3 +15,9 @@ export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 export const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET ?? "certificates";
+
+export const SUPABASE_COMPANY_BUCKET =
+  process.env.SUPABASE_COMPANY_BUCKET ?? "company-documents";
+
+  export const SUPABASE_LOGO_BUCKET =
+  process.env.SUPABASE_LOGO_BUCKET ?? "company-logos";

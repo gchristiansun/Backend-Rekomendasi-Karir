@@ -4,7 +4,7 @@ tags:
 
 /api/jobs:
   get:
-    summary: Daftar lowongan aktif
+    summary: Daftar lowongan aktif (pencarian menampilkan semua, termasuk yang sudah dilamar)
     tags: [JOB]
     security:
       - bearerAuth: []
@@ -15,6 +15,9 @@ tags:
       - name: type
         in: query
         schema: { type: string, example: "fulltime" }
+      - name: location
+        in: query
+        schema: { type: string }
     responses:
       200:
         description: Daftar lowongan aktif
@@ -29,21 +32,35 @@ tags:
         application/json:
           schema:
             type: object
-            required: [title, description, skills]
+            required: [title, department, location, requirements]
             properties:
               title: { type: string, example: "Backend Developer" }
-              description: { type: string, example: "Membangun REST API dengan Node.js" }
-              location: { type: string, example: "Jakarta" }
+              department: { type: string, example: "Technology" }
               type: { type: string, example: "fulltime" }
+              location: { type: string, example: "Jakarta" }
+              description: { type: string, description: "Opsional" }
               salaryMin: { type: integer }
               salaryMax: { type: integer }
-              skills:
+              requirements:
                 type: array
-                items: { type: string }
-                example: ["Node.js", "PostgreSQL", "Docker"]
+                description: >
+                  Detail persyaratan. Satu item = satu tanggung jawab.
+                  Keahlian disimpan di DB sebagai satu kolom dipisah koma.
+                minItems: 1
+                items:
+                  type: object
+                  required: [requirement, skills]
+                  properties:
+                    requirement:
+                      type: string
+                      example: "Membangun dan memelihara REST API"
+                    skills:
+                      type: array
+                      items: { type: string }
+                      example: ["Node.js", "Express", "REST API"]
     responses:
       201:
-        description: Lowongan dibuat
+        description: Lowongan dibuat (JobSkill terisi otomatis, weight = frekuensi skill)
       403:
         description: Perusahaan belum diverifikasi / bukan HRD
 
@@ -59,7 +76,7 @@ tags:
 
 /api/jobs/{id}:
   get:
-    summary: Detail lowongan
+    summary: Detail lowongan (termasuk requirements)
     tags: [JOB]
     security:
       - bearerAuth: []
@@ -75,6 +92,7 @@ tags:
         description: Lowongan tidak ditemukan
   patch:
     summary: Update lowongan (HRD, pemilik)
+    description: Bila `requirements` dikirim, seluruh persyaratan & skill disinkronkan ulang.
     tags: [JOB]
     security:
       - bearerAuth: []
@@ -83,6 +101,29 @@ tags:
         in: path
         required: true
         schema: { type: string }
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title: { type: string }
+              department: { type: string }
+              type: { type: string }
+              location: { type: string }
+              description: { type: string }
+              salaryMin: { type: integer }
+              salaryMax: { type: integer }
+              status: { type: string, example: "active" }
+              requirements:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    requirement: { type: string }
+                    skills:
+                      type: array
+                      items: { type: string }
     responses:
       200:
         description: Lowongan diperbarui

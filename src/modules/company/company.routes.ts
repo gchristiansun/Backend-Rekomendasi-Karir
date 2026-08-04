@@ -6,12 +6,15 @@ import {
   getCompanyHandler,
   verifyCompanyHandler,
   rejectCompanyHandler,
+  uploadLogoHandler,
+  companyReviewHandler,
 } from "./company.controller";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { authorizeRole } from "../../middleware/authorizeRole";
 import { validateRequest } from "../../middleware/validateRequest";
-import { updateCompanySchema } from "./company.validation";
 import { ROLES } from "../../constants";
+import { uploadLogo } from "../../config/upload";
+import { updateCompanySchema, verifyCompanySchema, rejectCompanySchema } from "./company.validation";
 
 const router = Router();
 
@@ -19,10 +22,23 @@ const router = Router();
 router.get("/me", authMiddleware, authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF), myCompanyHandler);
 router.patch("/me", authMiddleware, authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF), validateRequest(updateCompanySchema), updateMyCompanyHandler);
 
+// route /me/... harus di atas /:id
+router.patch(
+  "/me/logo",
+  authMiddleware,
+  authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF),
+  uploadLogo.single("logo"),
+  uploadLogoHandler,
+);
+const ADMIN = authorizeRole(ROLES.ADMIN);
+
+router.get("/:id/review", authMiddleware, ADMIN, companyReviewHandler);
+router.patch("/:id/verify", authMiddleware, ADMIN, validateRequest(verifyCompanySchema), verifyCompanyHandler);
+router.patch("/:id/reject", authMiddleware, ADMIN, validateRequest(rejectCompanySchema), rejectCompanyHandler);
+
 // Admin Utama: kelola & verifikasi
 router.get("/", authMiddleware, authorizeRole(ROLES.ADMIN), listCompaniesHandler);
-router.patch("/:id/verify", authMiddleware, authorizeRole(ROLES.ADMIN), verifyCompanyHandler);
-router.patch("/:id/reject", authMiddleware, authorizeRole(ROLES.ADMIN), rejectCompanyHandler);
 router.get("/:id", authMiddleware, authorizeRole(ROLES.ADMIN), getCompanyHandler);
+
 
 export default router;

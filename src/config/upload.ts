@@ -52,3 +52,35 @@ export const uploadCsv = multer({
     else cb(new HttpError(400, "File harus berformat CSV"));
   },
 });
+
+// Uploader dokumen perusahaan: izinUsaha (wajib, PDF) + suratResmi (opsional).
+const COMPANY_DOC_ALLOWED = ["application/pdf", "image/jpeg", "image/png"];
+
+export const uploadCompanyDocs = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB (sesuai hint frontend)
+  fileFilter: (_req, file, cb) => {
+    // Izin Usaha wajib PDF (sesuai form: "Hanya format PDF")
+    if (file.fieldname === "izinUsaha") {
+      if (file.mimetype === "application/pdf") cb(null, true);
+      else cb(new HttpError(400, "Izin Usaha harus berformat PDF"));
+      return;
+    }
+    // Surat resmi: PDF/JPG/PNG
+    if (COMPANY_DOC_ALLOWED.includes(file.mimetype)) cb(null, true);
+    else cb(new HttpError(400, "Format dokumen harus PDF, JPG, atau PNG"));
+  },
+});
+
+
+// Uploader logo perusahaan (gambar, maksimal 2 MB).
+const LOGO_ALLOWED = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
+
+export const uploadLogo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (LOGO_ALLOWED.includes(file.mimetype)) cb(null, true);
+    else cb(new HttpError(400, "Logo harus berformat PNG, JPG, SVG, atau WEBP"));
+  },
+});

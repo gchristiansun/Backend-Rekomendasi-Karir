@@ -14,6 +14,8 @@ import importRouter from "../modules/import/import.routes";
 import gradeRouter from "../modules/grade/grade.routes";
 import analyticsRouter from "../modules/analytics/analytics.routes";
 import recommendationRouter from "../modules/recommendation/recommendation.routes";
+import interactionRouter from "../modules/interaction/interaction.routes";
+import invitationRouter from "../modules/invitation/invitation.routes";
 
 const mainApiRouter = Router();
 
@@ -32,5 +34,7 @@ mainApiRouter.use("/import", importRouter);
 mainApiRouter.use("/grades", gradeRouter);
 mainApiRouter.use("/analytics", analyticsRouter);
 mainApiRouter.use("/recommendation", recommendationRouter);
+mainApiRouter.use("/interactions", interactionRouter);
+mainApiRouter.use("/invitations", invitationRouter);
 
 export default mainApiRouter;

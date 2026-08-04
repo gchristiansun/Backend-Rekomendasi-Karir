@@ -44,9 +44,9 @@ export type JobType = (typeof JOB_TYPE)[keyof typeof JOB_TYPE];
 export const ALL_JOB_TYPES = Object.values(JOB_TYPE) as JobType[];
 
 export const JOB_STATUS = {
-    DRAFT: "draft",
-    ACTIVE: "active",
-    CLOSED: "closed",
+  ACTIVE: "active",
+  CLOSED: "closed",
+  DRAFT: "draft", // disusun HRD, belum ditayangkan
 } as const;
 export type JobStatus = (typeof JOB_STATUS)[keyof typeof JOB_STATUS];
 export const ALL_JOB_STATUS = Object.values(JOB_STATUS) as JobStatus[];
@@ -89,3 +89,10 @@ export const NOTIFICATION_TYPE = {
 
 // Batas nilai kelulusan. Nilai >= ini -> lulus -> skill matkul diberikan ke mahasiswa.
 export const PASSING_SCORE = 50;
+
+export const INVITATION_STATUS = {
+  PENDING: "pending",
+  ACCEPTED: "accepted",
+  DECLINED: "declined",
+  CANCELLED: "cancelled",
+} as const;

@@ -1,86 +1,213 @@
 tags:
   - name: AUTH
-    description: API untuk autentikasi pengguna
+    description: Registrasi, autentikasi, dan pemulihan akun
 
-# Regiter
 /api/auth/register:
   post:
-    summary: REGISTER
-    tags:
-      - AUTH
+    summary: Registrasi mahasiswa
+    tags: [AUTH]
     requestBody:
       required: true
       content:
         application/json:
           schema:
             type: object
-            required:
-              - name
-              - email
-              - password
+            required: [name, email, password]
             properties:
-              name:
-                type: string
-              email:
-                type: string
-              password:
-                type: string
+              name: { type: string, example: "Budi Mahasiswa" }
+              email: { type: string, example: "budi@student.com" }
+              password: { type: string, example: "password123" }
+              phone: { type: string }
     responses:
       201:
-        description: Create user berhasil
+        description: Akun dibuat
       409:
-        description: Email already exists
+        description: Email sudah terdaftar
 
-# Login
+/api/auth/register/company:
+  post:
+    summary: Registrasi perusahaan (4 tahap, multipart/form-data)
+    tags: [AUTH]
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [name, email, password, companyName, nib, izinUsaha]
+            properties:
+              name: { type: string, example: "Rina Direktur" }
+              email: { type: string, example: "direktur@majuteknologi.com" }
+              password: { type: string, example: "password123" }
+              companyName: { type: string, example: "Maju Teknologi" }
+              industry: { type: string, example: "Teknologi Informasi" }
+              size: { type: string, example: "51–200 Karyawan" }
+              website: { type: string, example: "https://majuteknologi.com" }
+              address: { type: string }
+              description: { type: string }
+              nib: { type: string, example: "9120001234567", description: "13 digit angka" }
+              izinUsaha: { type: string, format: binary, description: "PDF, wajib" }
+              suratResmi: { type: string, format: binary, description: "PDF/JPG/PNG, opsional" }
+    responses:
+      201:
+        description: Pendaftaran berhasil, perusahaan berstatus pending
+      409:
+        description: Email atau NIB sudah terdaftar
+
 /api/auth/login:
   post:
-    summary: LOGIN
-    tags:
-      - AUTH
+    summary: Login
+    tags: [AUTH]
     requestBody:
       required: true
       content:
         application/json:
           schema:
             type: object
-            required:
-              - email
-              - password
+            required: [email, password]
             properties:
-              email:
-                type: string
-              password:
-                type: string
+              email: { type: string, example: "mahasiswa@student.com" }
+              password: { type: string, example: "mahasiswa123" }
     responses:
       200:
-        description: Login successfully
+        description: Login berhasil (accessToken + data user)
       401:
-        description: Invalid email or password
-      404:
-        description: User not found
+        description: Email atau password salah
+      403:
+        description: Akun dinonaktifkan
 
-# Logout
 /api/auth/logout:
   post:
-    summary: LOGOUT
-    tags:
-      - AUTH
+    summary: Logout (hapus refresh token)
+    tags: [AUTH]
+    responses:
+      200:
+        description: Logout berhasil
+
+/api/auth/refresh-token:
+  post:
+    summary: Perbarui access token dari cookie refresh token
+    tags: [AUTH]
+    responses:
+      200:
+        description: Access token baru
+      401:
+        description: Refresh token tidak valid
+
+/api/auth/me:
+  get:
+    summary: Profil akun yang login
+    tags: [AUTH]
     security:
       - bearerAuth: []
     responses:
       200:
-        description: Logout successfully
+        description: Data user (termasuk recoveryEmail & recoveryEmailVerifiedAt)
 
-# Refresh token
-/api/auth/refresh-token:
-  post:
-    summary: REFRESH TOKEN
-    tags:
-      - AUTH
+/api/auth/password:
+  patch:
+    summary: Ubah kata sandi (sedang login)
+    tags: [AUTH]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [currentPassword, newPassword]
+            properties:
+              currentPassword: { type: string }
+              newPassword: { type: string, example: "passwordbaru123" }
     responses:
       200:
-        description: Token refreshed successfully
+        description: Kata sandi diubah
       401:
-        description: No refresh token rovided
-      403:
-        description: Invalid or expired resfresh token
+        description: Kata sandi lama salah
+
+/api/auth/forgot-password:
+  post:
+    summary: Minta tautan pemulihan kata sandi
+    description: >
+      Tautan dikirim ke email utama DAN email pemulihan yang sudah terverifikasi
+      (terpisah). Respons selalu generik untuk mencegah user enumeration.
+    tags: [AUTH]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email]
+            properties:
+              email: { type: string, example: "mahasiswa@student.com" }
+    responses:
+      200:
+        description: Pesan generik (terkirim bila email terdaftar)
+
+/api/auth/reset-password:
+  post:
+    summary: Atur ulang kata sandi dengan token dari email
+    tags: [AUTH]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token, newPassword]
+            properties:
+              token: { type: string, description: "Token dari tautan email (berlaku 1 jam)" }
+              newPassword: { type: string, example: "passwordbaru123" }
+    responses:
+      200:
+        description: Kata sandi berhasil diubah, sesi lama dilogout
+      400:
+        description: Tautan tidak valid atau kedaluwarsa
+
+/api/auth/recovery-email:
+  patch:
+    summary: Pasang / ganti email pemulihan (butuh konfirmasi password)
+    description: >
+      Untuk akun yang email kampusnya dinonaktifkan setelah lulus.
+      Alamat baru berstatus belum terverifikasi sampai tautan verifikasi diklik.
+    tags: [AUTH]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [recoveryEmail, password]
+            properties:
+              recoveryEmail: { type: string, example: "pribadi@gmail.com" }
+              password: { type: string, description: "Password akun saat ini" }
+    responses:
+      200:
+        description: Tautan verifikasi dikirim ke email pemulihan
+      400:
+        description: Email pemulihan sama dengan email utama
+      401:
+        description: Password salah
+
+/api/auth/recovery-email/verify:
+  post:
+    summary: Verifikasi email pemulihan lewat token
+    tags: [AUTH]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token]
+            properties:
+              token: { type: string, description: "Token dari tautan email (berlaku 24 jam)" }
+    responses:
+      200:
+        description: Email pemulihan terverifikasi
+      400:
+        description: Tautan tidak valid atau kedaluwarsa

@@ -20,6 +20,8 @@ model User {
     role          String   @default("student")
     status        String   @default("active")
     refresh_token String?
+    recoveryEmail           String?
+    recoveryEmailVerifiedAt DateTime?
     created_at    DateTime @default(now())
     updated_at    DateTime @updatedAt
 
@@ -29,6 +31,11 @@ model User {
     notifications    Notification[]
     reviewedCerts    Certificate[]     @relation("CertReviewer")
     postedJobs       Job[]             @relation("JobPostedBy")
+    invitationsSent JobInvitation[] @relation("InvitationSentBy")
+    passwordResets   PasswordResetToken[]
+    recoveryTokens RecoveryEmailToken[]
+    
+    
 
     @@index([role])
     @@index([status])
@@ -79,27 +86,35 @@ model Student {
     subjectsTaken SubjectTaken[]
     certificates Certificate[]
     applications Application[]
+    favorites    JobFavorite[]
+    jobViews     JobView[]
+    invitations JobInvitation[]
 
     @@index([universityId])
 }
 
 model Company {
-    id          String    @id @default(ulid())
-    name        String
-    industry    String?
-    description String?
-    website     String?
-    logoUrl     String?
-    status      String    @default("pending")
-    verifiedAt  DateTime?
-    created_at  DateTime  @default(now())
-    updated_at  DateTime  @updatedAt
+  id            String    @id @default(ulid())
+  name          String
+  industry      String?
+  description   String?
+  website       String?
+  logoUrl       String?
+  size          String?   // ukuran perusahaan (mis. "51–200 Karyawan")
+  address       String?   // alamat kantor pusat
+  nib           String?   @unique // Nomor Induk Berusaha (13 digit)
+  izinUsahaUrl  String?   // dokumen izin usaha (PDF) di Supabase
+  suratResmiUrl String?   // surat resmi perusahaan (opsional)
+  status        String    @default("pending")
+  verifiedAt    DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
 
-    members CompanyMember[]
-    jobs    Job[]
+  members CompanyMember[]
+  jobs    Job[]
 
-    @@index([status])
-    }
+  @@index([status])
+}
 
 model CompanyMember {
     id         String   @id @default(ulid())
@@ -227,27 +242,34 @@ model OnlineCourseSkill {
 }
 
 model Job {
-    id          String   @id @default(ulid())
-    companyId   String
-    postedById  String?
-    title       String
-    description String?
-    location    String?
-    type        String   @default("fulltime")
-    status      String   @default("active")
-    salaryMin   Int?
-    salaryMax   Int?
-    created_at  DateTime @default(now())
-    updated_at  DateTime @updatedAt
+  id          String   @id @default(ulid())
+  companyId   String
+  postedById  String?
+  title       String   // nama posisi
+  department  String?  // departemen (Technology, Finance, ...)
+  description String?  // opsional (digantikan detail persyaratan)
+  location    String?
+  type        String   @default("fulltime")
+  status      String   @default("active")
+  salaryMin   Int?
+  salaryMax   Int?
+  postingDate DateTime? // tanggal mulai lowongan ditayangkan
+  deadline    DateTime? // batas akhir menerima lamaran
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 
-    company  Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    postedBy User?   @relation("JobPostedBy", fields: [postedById], references: [id], onDelete: SetNull)
+  company  Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  postedBy User?   @relation("JobPostedBy", fields: [postedById], references: [id], onDelete: SetNull)
 
-    skills       JobSkill[]
-    applications Application[]
+  skills       JobSkill[]       // untuk mesin matching rule-based (diisi otomatis)
+  requirements JobRequirement[] // detail persyaratan (display + unit embedding semantik)
+  applications Application[]
+  favorites    JobFavorite[]
+  views        JobView[]
+  invitations JobInvitation[]
 
-    @@index([companyId])
-    @@index([status])
+  @@index([companyId])
+  @@index([status])
 }
 
 model JobSkill {
@@ -263,6 +285,62 @@ model JobSkill {
     @@index([skillId])
 }
 
+// ----------------------------------------------------------------------------
+// SINYAL PERILAKU MAHASISWA (implicit feedback untuk model pemeringkatan)
+// ----------------------------------------------------------------------------
+
+// Favorit / basket: mahasiswa menyimpan lowongan.
+model JobFavorite {
+  id         String   @id @default(ulid())
+  studentId  String
+  jobId      String
+  created_at DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  job     Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, jobId])
+  @@index([jobId])
+}
+
+// Log tampilan + durasi. Satu baris = satu kunjungan (event log, bukan counter),
+// supaya urutan waktu & durasi per kunjungan tidak hilang untuk pelatihan model.
+model JobView {
+  id         String   @id @default(ulid())
+  studentId  String
+  jobId      String
+  source     String   @default("detail") // detail | list | search | recommendation
+  durationMs Int?     // diisi saat mahasiswa meninggalkan halaman
+  created_at DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  job     Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, jobId])
+  @@index([jobId])
+  @@index([created_at])
+}
+
+// ----------------------------------------------------------------------------
+// DETAIL PERSYARATAN LOWONGAN
+// Satu baris = satu tanggung jawab; keahlian digabung koma di satu kolom.
+// Contoh skills: "Node.js,Express,PostgreSQL"
+// embedding: vektor requirement (JSON string) - diisi AI service nanti,
+//            untuk pencocokan semantik dengan CLO mahasiswa.
+// ----------------------------------------------------------------------------
+model JobRequirement {
+  id          String  @id @default(ulid())
+  jobId       String
+  requirement String  // teks tanggung jawab
+  skills      String  // keahlian dipisah delimiter ","
+  order       Int     @default(0)
+  embedding   String? // vektor 1024-dim (JSON) - nanti dari model yang sama dgn CLO
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+}
+
 model Application {
     id            String   @id @default(ulid())
     jobId         String
@@ -270,6 +348,7 @@ model Application {
     status        String   @default("submitted")
     coverLetter   String?
     matchSnapshot Int?
+    hiddenFromRecommendation Boolean @default(false)
     created_at    DateTime @default(now())
     updated_at    DateTime @updatedAt
 
@@ -329,4 +408,65 @@ model Notification {
 
     @@index([userId])
     @@index([isRead])
+}
+
+// ----------------------------------------------------------------------------
+// TOKEN RESET PASSWORD (lupa kata sandi)
+// Token disimpan sebagai HASH (bukan mentah) demi keamanan.
+// ----------------------------------------------------------------------------
+model PasswordResetToken {
+  id         String    @id @default(ulid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  created_at DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------------------
+// TOKEN VERIFIKASI EMAIL PEMULIHAN
+// email: alamat yang SEDANG diverifikasi (dibawa di token, bukan cuma di User,
+// supaya kalau user ganti alamat sebelum klik, token lama tidak mengesahkan
+// alamat yang salah).
+// ----------------------------------------------------------------------------
+model RecoveryEmailToken {
+  id         String    @id @default(ulid())
+  userId     String
+  email      String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  created_at DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------------------
+// UNDANGAN MELAMAR (perusahaan merekrut kandidat lebih dulu)
+// Mahasiswa yang menerima undangan -> otomatis menjadi Application.
+// ----------------------------------------------------------------------------
+model JobInvitation {
+  id          String    @id @default(ulid())
+  jobId       String
+  studentId   String
+  invitedById String?
+  message     String?
+  status      String    @default("pending") // pending | accepted | declined | cancelled
+  respondedAt DateTime?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  job       Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  invitedBy User?   @relation("InvitationSentBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([jobId, studentId])
+  @@index([studentId])
+  @@index([jobId])
 }

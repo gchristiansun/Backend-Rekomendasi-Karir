@@ -32,3 +32,25 @@ export const matchCandidatesHandler = asyncHandler(async (req: Request, res: Res
   const result = await matchingService.matchCandidatesForJob(String(req.params.jobId));
   return sendSuccess(res, result, "Daftar kandidat terurut kecocokan");
 });
+
+// GET /matching/candidates - talent pool lintas lowongan perusahaan
+export const companyCandidatesHandler = asyncHandler(async (req: Request, res: Response) => {
+  const member = await getCompanyMembership(req.user!.id);
+  const data = await matchingService.listCompanyCandidates(member.companyId, {
+    jobId: req.query.jobId ? String(req.query.jobId) : undefined,
+    limit: req.query.limit ? Number(req.query.limit) : undefined,
+  });
+  return sendSuccess(res, data, "Rekomendasi kandidat perusahaan");
+});
+
+// GET /matching/candidates/detail/:studentId?jobId=...
+export const candidateDetailHandler = asyncHandler(async (req: Request, res: Response) => {
+  const member = await getCompanyMembership(req.user!.id);
+  const data = await matchingService.getCandidateDetail(
+    member.companyId,
+    String(req.params.studentId),
+    { jobId: req.query.jobId ? String(req.query.jobId) : undefined },
+  );
+  if (!data) throw new HttpError(404, "Kandidat tidak ditemukan");
+  return sendSuccess(res, data, "Detail kandidat");
+});

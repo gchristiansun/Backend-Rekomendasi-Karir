@@ -6,6 +6,8 @@ import { getStudentByUserId, getCompanyMembership } from "../../utils/context";
 import { HttpError } from "../../utils/httpError";
 import { getJobOwner } from "../job/job.service";
 import { APPLICATION_STATUS } from "../../constants";
+import * as applicationService from "./application.service";
+
 
 // POST /applications (mahasiswa melamar)
 export const applyHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -62,4 +64,31 @@ export const withdrawHandler = asyncHandler(async (req: Request, res: Response) 
   }
   await appService.withdraw(String(req.params.id));
   return sendSuccess(res, null, "Lamaran dibatalkan");
+});
+
+// GET /applications/company - semua pelamar lowongan perusahaan yang login
+export const companyApplicationsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const member = await getCompanyMembership(req.user!.id);
+
+  const page = Number(req.query.page ?? 1);
+  const limit = Number(req.query.limit ?? 100);
+  const skip = (page - 1) * limit;
+
+  const result = await applicationService.listCompanyApplications(member.companyId, {
+    jobId: req.query.jobId ? String(req.query.jobId) : undefined,
+    status: req.query.status ? String(req.query.status) : undefined,
+    search: req.query.search ? String(req.query.search) : undefined,
+    skip,
+    take: limit,
+  });
+
+  return sendSuccess(
+    res,
+    {
+      applications: result.applications,
+      summary: result.summary,
+      pagination: { total: result.total, page, limit },
+    },
+    "Daftar pelamar perusahaan",
+  );
 });

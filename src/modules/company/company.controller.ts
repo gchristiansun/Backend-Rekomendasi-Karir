@@ -7,6 +7,10 @@ import { getCompanyMembership } from "../../utils/context";
 import { HttpError } from "../../utils/httpError";
 import { COMPANY_STATUS, NOTIFICATION_TYPE } from "../../constants";
 import prisma from "../../config/prisma";
+import { supabase, SUPABASE_LOGO_BUCKET } from "../../config/supabase";
+import { randomUUID } from "crypto";
+import { sendMail } from "../../config/mailer";
+import { VerifyCompanyInput, RejectCompanyInput } from "./company.validation";
 
 // GET /companies (admin) - daftar + filter status (mis. ?status=pending untuk verifikasi)
 export const listCompaniesHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -41,33 +45,97 @@ export const getCompanyHandler = asyncHandler(async (req: Request, res: Response
   return sendSuccess(res, company, "Detail perusahaan");
 });
 
-// PATCH /companies/:id/verify (admin)
-export const verifyCompanyHandler = asyncHandler(async (req: Request, res: Response) => {
-  const company = await companyService.getCompanyById(String(req.params.id));
+// GET /companies/:id/review (Superadmin) - data lengkap untuk halaman verifikasi
+export const companyReviewHandler = asyncHandler(async (req: Request, res: Response) => {
+  const company = await companyService.getCompanyForReview(String(req.params.id));
   if (!company) throw new HttpError(404, "Perusahaan tidak ditemukan");
-
-  const updated = await companyService.setVerification(String(req.params.id), COMPANY_STATUS.VERIFIED);
-
-  // notifikasi ke seluruh anggota perusahaan
-  await Promise.all(
-    company.members.map((m: any) =>
-      prisma.notification.create({
-        data: {
-          userId: m.user.id,
-          title: "Perusahaan terverifikasi",
-          message: `Perusahaan ${company.name} telah diverifikasi. Anda kini dapat memposting lowongan.`,
-          type: NOTIFICATION_TYPE.SYSTEM,
-        },
-      }),
-    ),
-  );
-  return sendSuccess(res, updated, "Perusahaan diverifikasi");
+  return sendSuccess(res, company, "Detail perusahaan untuk verifikasi");
 });
 
-// PATCH /companies/:id/reject (admin)
+// PATCH /companies/me/logo (multipart/form-data, field: logo)
+export const uploadLogoHandler = asyncHandler(async (req: Request, res: Response) => {
+  const member = await getCompanyMembership(req.user!.id);
+
+  const file = req.file;
+  if (!file) throw new HttpError(400, "Berkas logo wajib diunggah");
+
+  const ext = file.originalname.split(".").pop()?.toLowerCase() ?? "png";
+  const objectPath = `${member.companyId}/${Date.now()}-${randomUUID()}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from(SUPABASE_LOGO_BUCKET)
+    .upload(objectPath, file.buffer, { contentType: file.mimetype, upsert: false });
+  if (error) throw new HttpError(500, `Gagal mengunggah logo: ${error.message}`);
+
+  const { data } = supabase.storage.from(SUPABASE_LOGO_BUCKET).getPublicUrl(objectPath);
+  const company = await companyService.updateCompanyLogo(member.companyId, data.publicUrl);
+
+  return sendSuccess(res, { logoUrl: company.logoUrl }, "Logo perusahaan diperbarui");
+});
+
+const mailShell = (title: string, body: string) => `
+  <div style="font-family:Arial,sans-serif;max-width:520px">
+    <h2 style="color:#0f5ce0">${title}</h2>
+    ${body}
+    <p style="color:#888;font-size:12px;margin-top:24px">
+      Email ini dikirim otomatis oleh Sistem Rekomendasi Karir.
+    </p>
+  </div>`;
+
+// PATCH /companies/:id/verify (Superadmin)
+export const verifyCompanyHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { message } = req.body as VerifyCompanyInput;
+
+  const { company, contacts } = await companyService.verifyCompanyWithMessage(
+    String(req.params.id),
+    message,
+  );
+
+  const catatan = message ? `<p><b>Catatan dari Admin:</b><br>${message}</p>` : "";
+
+  // Email dikirim terpisah per penerima agar alamat tidak saling terlihat.
+  for (const c of contacts) {
+    await sendMail(
+      c.email,
+      `Perusahaan ${company.name} Telah Diverifikasi`,
+      mailShell(
+        "Verifikasi Berhasil",
+        `<p>Halo ${c.name ?? ""},</p>
+         <p>Perusahaan <b>${company.name}</b> telah <b>diverifikasi</b>.
+            Seluruh fitur rekrutmen kini terbuka: memasang lowongan, melihat pelamar,
+            dan mengundang kandidat.</p>
+         ${catatan}`,
+      ),
+    );
+  }
+
+  return sendSuccess(res, company, "Perusahaan diverifikasi dan pemberitahuan telah dikirim");
+});
+
+// PATCH /companies/:id/reject (Superadmin) - akun dihapus permanen
 export const rejectCompanyHandler = asyncHandler(async (req: Request, res: Response) => {
-  const company = await companyService.getCompanyById(String(req.params.id));
-  if (!company) throw new HttpError(404, "Perusahaan tidak ditemukan");
-  const updated = await companyService.setVerification(String(req.params.id), COMPANY_STATUS.REJECTED);
-  return sendSuccess(res, updated, "Perusahaan ditolak");
+  const { reason } = req.body as RejectCompanyInput;
+
+  const { company, contacts } = await companyService.rejectAndDeleteCompany(
+    String(req.params.id),
+    reason,
+  );
+
+  // Email WAJIB dikirim setelah data diambil, karena akunnya sudah dihapus.
+  for (const c of contacts) {
+    await sendMail(
+      c.email,
+      `Pendaftaran ${company.name} Ditolak`,
+      mailShell(
+        "Pendaftaran Ditolak",
+        `<p>Halo ${c.name ?? ""},</p>
+         <p>Pendaftaran perusahaan <b>${company.name}</b> tidak dapat kami setujui.</p>
+         <p><b>Alasan penolakan:</b><br>${reason}</p>
+         <p>Akun beserta dokumen yang diunggah telah dihapus dari sistem.
+            Anda dapat mendaftar ulang setelah memperbaiki hal-hal di atas.</p>`,
+      ),
+    );
+  }
+
+  return sendSuccess(res, company, "Pendaftaran ditolak, akun dihapus, dan pemberitahuan telah dikirim");
 });

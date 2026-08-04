@@ -36,3 +36,37 @@ export const changePasswordSchema = z
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type RegisterUserInput = z.infer<typeof registerUserSchema>;
 export type LoginUserInput = z.infer<typeof loginUserSchema>;
+
+export const forgotPasswordSchema = z.object({
+  email: z.email("Email tidak valid"),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(10, "Token tidak valid"),
+  newPassword: z.string().min(8, "Password baru minimal 8 karakter"),
+});
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export const setRecoveryEmailSchema = z.object({
+  recoveryEmail: z.email("Email pemulihan tidak valid"),
+  password: z.string().min(1, "Password wajib diisi untuk konfirmasi"),
+});
+
+export const verifyRecoveryEmailSchema = z.object({
+  token: z.string().min(10, "Token tidak valid"),
+});
+
+export type SetRecoveryEmailInput = z.infer<typeof setRecoveryEmailSchema>;
+export type VerifyRecoveryEmailInput = z.infer<typeof verifyRecoveryEmailSchema>;
+
+export const updateMeSchema = z.object({
+  name: z.string().min(3, "Nama minimal 3 karakter").optional(),
+  phone: z.string().min(6, "Nomor telepon terlalu pendek").max(30).optional(),
+  email: z.email("Email tidak valid").optional(),
+  // wajib diisi hanya bila email diubah
+  password: z.string().optional(),
+});
+
+export type UpdateMeInput = z.infer<typeof updateMeSchema>;

@@ -1,0 +1,131 @@
+tags:
+  - name: INTERACTION
+    description: Sinyal perilaku mahasiswa (favorit, view, durasi) untuk model pemeringkatan
+
+/api/interactions/favorites:
+  get:
+    summary: Daftar lowongan favorit mahasiswa
+    tags: [INTERACTION]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Daftar favorit beserta info lowongan
+  post:
+    summary: Tambahkan lowongan ke favorit (basket)
+    tags: [INTERACTION]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [jobId]
+            properties:
+              jobId: { type: string, example: "01KWG7ABCDEF" }
+    responses:
+      201:
+        description: Lowongan ditambahkan ke favorit
+      404:
+        description: Lowongan tidak ditemukan
+
+/api/interactions/favorites/{jobId}:
+  delete:
+    summary: Hapus lowongan dari favorit (unfavorite)
+    tags: [INTERACTION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Lowongan dihapus dari favorit (idempoten)
+
+/api/interactions/views:
+  post:
+    summary: Catat kunjungan halaman lowongan
+    tags: [INTERACTION]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [jobId]
+            properties:
+              jobId: { type: string }
+              source:
+                type: string
+                enum: [detail, list, search, recommendation]
+                example: "detail"
+              durationMs:
+                type: integer
+                description: Opsional, bila durasi langsung diketahui
+                example: 45000
+    responses:
+      201:
+        description: Kunjungan dicatat (kembalikan id untuk update durasi)
+
+/api/interactions/views/{id}/duration:
+  patch:
+    summary: Perbarui durasi kunjungan (saat meninggalkan halaman)
+    tags: [INTERACTION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+        description: id dari response POST /interactions/views
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [durationMs]
+            properties:
+              durationMs:
+                type: integer
+                description: Maksimal 3600000 (1 jam)
+                example: 45000
+    responses:
+      200:
+        description: Durasi diperbarui
+      404:
+        description: Log kunjungan tidak ditemukan
+
+/api/interactions/signals/me:
+  get:
+    summary: Sinyal perilaku mahasiswa (agregat per lowongan)
+    tags: [INTERACTION]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: totalFavorites, totalViews, totalApplications, perJob[]
+
+/api/interactions/signals/job/{jobId}:
+  get:
+    summary: Statistik lowongan (HRD, hanya lowongan perusahaannya)
+    tags: [INTERACTION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: applicantCount, favoriteCount, viewCount, avgDurationMs
+      403:
+        description: Bukan lowongan perusahaan Anda
