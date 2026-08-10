@@ -56,6 +56,8 @@ export interface CloVector {
   code: string;
   text: string;
   vec: number[];
+  weight?: number;      // bobot nilai matkul asal (0-1)
+  gradeLabel?: string;  // nilai apa adanya, untuk tampilan
 }
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -114,7 +116,12 @@ export const collectStudentCloVectors = (
   for (const st of subjectsTaken ?? []) {
     if (!isPassedGrade(st.score, st.grade)) continue;
     const clos = bySubject.get(st.subjectId);
-    if (clos) out.push(...clos);
+    if (!clos) continue;
+    // Bobot menempel pada matkul, tetapi dibawa per CLO karena penilaian
+    // dilakukan per CLO.
+    const w = gradeWeight(st.score, st.grade);
+    const label = gradeLabel(st.score, st.grade);
+    for (const c of clos) out.push({ ...c, weight: w, gradeLabel: label });
   }
   return out.slice(0, MAX_CLO_PER_STUDENT);
 };
@@ -127,27 +134,42 @@ export interface RequirementVector {
   vec: number[];
 }
 
+
+// Dipakai juga oleh analisis per-CLO agar skalanya seragam di seluruh aplikasi.
+export const rescaleSimilarity = (sim: number): number => rescale(sim);
+
 export interface SemanticMatchResult {
-  score: number;              // 0-100, sudah diskalakan
-  covered: number;            // requirement yang terpenuhi
+  score: number;              // 0-100, rata-rata kontribusi seluruh CLO
+  covered: number;            // requirement yang terpenuhi (untuk penjelasan)
   totalRequirements: number;
+  totalClos: number;
+  // rincian per CLO: inilah dasar perhitungan skor
+  perClo: {
+    cloId: string;
+    cloCode: string;
+    subjectId: string;
+    similarity: number;        // kemiripan mentah 0-1
+    similarityScore: number;   // 0-100 setelah diskalakan
+    weight: number;            // bobot nilai 0-1
+    gradeLabel: string;
+    contribution: number;      // 0-100 = similarityScore x weight
+    matchedRequirement: string | null;
+  }[];
+  // rincian per requirement: dipakai untuk menjelaskan cakupan lowongan
   perRequirement: {
     requirement: string;
-    similarity: number;       // kemiripan mentah 0-1
-    score: number;            // 0-100 setelah diskalakan
-    matkulCode: string | null;
+    similarity: number;
+    score: number;
     cloCode: string | null;
     cloText: string | null;
   }[];
 }
 
-// Dipakai juga oleh analisis per-CLO agar skalanya seragam di seluruh aplikasi.
-export const rescaleSimilarity = (sim: number): number => rescale(sim);
-
 /**
- * Mean of max per requirement: untuk tiap kebutuhan lowongan, cari CLO yang
- * paling mendekati, lalu rata-ratakan. Menjawab "seberapa terpenuhi kebutuhan
- * lowongan ini oleh kompetensi si mahasiswa".
+ * Skor akhir = rata-rata kontribusi tiap CLO, di mana
+ *   kontribusi = kemiripan semantik terbaik CLO itu x bobot nilai matkulnya.
+ * Menjawab "seberapa besar kompetensi yang benar-benar dikuasai mahasiswa
+ * menyentuh kebutuhan lowongan ini".
  */
 export const computeSemanticMatch = (
   cloVecs: CloVector[],
@@ -157,18 +179,53 @@ export const computeSemanticMatch = (
     score: 0,
     covered: 0,
     totalRequirements: reqVecs.length,
+    totalClos: cloVecs.length,
+    perClo: [],
     perRequirement: [],
   };
   if (cloVecs.length === 0 || reqVecs.length === 0) return kosong;
 
-  let total = 0;
-  let covered = 0;
+  // --- kontribusi per CLO (dasar skor) ---
+  const perClo: SemanticMatchResult["perClo"] = [];
+  let totalKontribusi = 0;
+
+  for (const clo of cloVecs) {
+    let best = -1;
+    let bestReq: string | null = null;
+
+    for (const req of reqVecs) {
+      const sim = dot(clo.vec, req.vec);
+      if (sim > best) {
+        best = sim;
+        bestReq = req.requirement;
+      }
+    }
+
+    const similarityScore = Math.round(rescale(best) * 100);
+    const weight = clo.weight ?? 1;
+    const contribution = Math.round(similarityScore * weight);
+    totalKontribusi += contribution;
+
+    perClo.push({
+      cloId: clo.cloId,
+      cloCode: clo.code,
+      subjectId: clo.subjectId,
+      similarity: Number(best.toFixed(4)),
+      similarityScore,
+      weight,
+      gradeLabel: clo.gradeLabel ?? "-",
+      contribution,
+      matchedRequirement: bestReq,
+    });
+  }
+
+  // --- cakupan per requirement (hanya untuk penjelasan, bukan skor) ---
   const perRequirement: SemanticMatchResult["perRequirement"] = [];
+  let covered = 0;
 
   for (const req of reqVecs) {
     let best = -1;
     let bestClo: CloVector | null = null;
-
     for (const clo of cloVecs) {
       const sim = dot(clo.vec, req.vec);
       if (sim > best) {
@@ -176,25 +233,64 @@ export const computeSemanticMatch = (
         bestClo = clo;
       }
     }
-
-    const scaled = rescale(best);
-    total += scaled;
     if (best >= COVERAGE_THRESHOLD) covered += 1;
-
     perRequirement.push({
       requirement: req.requirement,
       similarity: Number(best.toFixed(4)),
-      score: Math.round(scaled * 100),
-      matkulCode: bestClo?.subjectId ?? null,
+      score: Math.round(rescale(best) * 100),
       cloCode: bestClo?.code ?? null,
       cloText: bestClo?.text ?? null,
     });
   }
 
   return {
-    score: Math.round((total / reqVecs.length) * 100),
+    score: Math.round(totalKontribusi / cloVecs.length),
     covered,
     totalRequirements: reqVecs.length,
+    totalClos: cloVecs.length,
+    perClo,
     perRequirement,
   };
+};
+
+// Bobot nilai huruf -> 0..1. Sesuaikan dengan skala kampus bila berbeda.
+const GRADE_WEIGHT: Record<string, number> = {
+  A: 1.0,
+  AB: 0.875,
+  "B+": 0.875,
+  B: 0.75,
+  BC: 0.625,
+  "C+": 0.625,
+  C: 0.5,
+  D: 0.25,
+  E: 0,
+  F: 0,
+};
+
+/**
+ * Bobot penguasaan materi dari nilai matkul.
+ * Menerima nilai angka (0-100) maupun huruf; bila keduanya kosong,
+ * dianggap 1.0 agar CLO tetap terhitung penuh.
+ */
+export const gradeWeight = (score?: number | null, grade?: string | null): number => {
+  // Nilai angka bisa tersimpan di kolom score, atau di kolom grade sebagai teks.
+  if (typeof score === "number" && Number.isFinite(score)) {
+    return Math.max(0, Math.min(1, score / 100));
+  }
+
+  const teks = String(grade ?? "").trim();
+  if (teks === "") return 1;
+
+  const angka = Number(teks);
+  if (Number.isFinite(angka)) return Math.max(0, Math.min(1, angka / 100));
+
+  const g = teks.toUpperCase();
+  return g in GRADE_WEIGHT ? GRADE_WEIGHT[g] : 1;
+};
+
+// Label nilai untuk ditampilkan apa adanya di layar.
+export const gradeLabel = (score?: number | null, grade?: string | null): string => {
+  if (grade) return String(grade);
+  if (typeof score === "number") return String(score);
+  return "-";
 };

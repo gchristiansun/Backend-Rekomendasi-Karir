@@ -2,6 +2,9 @@ import prisma from "../../config/prisma";
 import { UpdateStudentInput } from "./student.validation";
 import { findOrCreateByNames } from "../skill/skill.service";
 import { SKILL_SOURCE } from "../../constants";
+import { USER_STATUS } from "../../constants";
+import { HttpError } from "../../utils/httpError";
+import { isPassedGrade } from "../../utils/semanticMatching";
 
 // Profil lengkap mahasiswa (untuk GET /students/me dan lihat detail kandidat).
 export const getStudentProfile = async (studentId: string) => {
@@ -106,6 +109,10 @@ export const listStudents = async (opts: {
       { user: { name: { contains: opts.search, mode: "insensitive" } } },
     ];
   }
+  
+  // Akun yang sudah dinonaktifkan (soft-delete) tidak ikut ditampilkan.
+  where.user = { ...(where.user ?? {}), status: { not: USER_STATUS.DELETED } };
+
   const [total, students] = await Promise.all([
     prisma.student.count({ where }),
     prisma.student.findMany({
@@ -120,4 +127,155 @@ export const listStudents = async (opts: {
     }),
   ]);
   return { total, students };
+};
+
+// Detail akademik mahasiswa untuk halaman kampus:
+// profil + ringkasan + nilai per CLO + sertifikat.
+export const getStudentAcademicDetail = async (studentId: string) => {
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    include: {
+      user: { select: { id: true, name: true, email: true, phone: true, status: true } },
+      university: { select: { id: true, name: true } },
+      certificates: {
+        select: { id: true, title: true, issuer: true, status: true, fileUrl: true, created_at: true },
+        orderBy: { created_at: "desc" },
+      },
+      subjectsTaken: {
+        include: { subject: { select: { id: true, code: true, name: true, sks: true } } },
+      },
+    },
+  });
+  if (!student) return null;
+
+  const cloGrades = await prisma.cLOGrade.findMany({
+    where: { studentId },
+    include: { clo: true },
+    orderBy: { created_at: "desc" },
+  });
+
+  // Mata kuliah diambil terpisah agar tidak bergantung pada nama relasi di model CLO.
+  const subjectIds = Array.from(new Set(cloGrades.map((g: any) => g.clo.subjectId)));
+  const subjects = subjectIds.length
+    ? await prisma.subject.findMany({
+        where: { id: { in: subjectIds } },
+        include: { skills: { include: { skill: { select: { id: true, name: true } } } } },
+      })
+    : [];
+  const subjectById = new Map(subjects.map((s: any) => [s.id, s]));
+
+  const cloDetails = cloGrades.map((g: any, i: number) => {
+    const subject = subjectById.get(g.clo.subjectId);
+    return {
+      id: g.id,
+      code: g.clo.code ?? g.clo.kode ?? `CLO${i + 1}`,
+      course: subject?.name ?? "-",
+      description:
+        g.clo.paraphrase ?? g.clo.parafrase ?? g.clo.description ?? g.clo.deskripsi ?? g.clo.text ?? "-",
+      // Keahlian melekat pada mata kuliah, bukan pada tiap CLO.
+      skills: (subject?.skills ?? []).map((ss: any) => ss.skill.name),
+      score: g.score,
+    };
+  });
+
+  const passed = student.subjectsTaken.filter((st: any) => isPassedGrade(st.score, st.grade));
+  const totalSks = passed.reduce((a: number, st: any) => a + (st.subject?.sks ?? 0), 0);
+
+  const verifiedCerts = student.certificates.filter((c: any) =>
+    ["approved", "verified"].includes(String(c.status).toLowerCase()),
+  );
+
+  return {
+    student: {
+      id: student.id,
+      nim: student.nim,
+      major: student.major,
+      semester: student.semester,
+      gpa: (student as any).gpa ?? null,
+      faculty: (student as any).faculty ?? null,
+      entryYear: (student as any).entryYear ?? null,
+      graduatedAt: (student as any).graduatedAt ?? null,
+      university: student.university,
+      user: student.user,
+    },
+    stats: {
+      totalSks,
+      totalClo: cloGrades.length,
+      certificationsCount: verifiedCerts.length,
+    },
+    cloDetails,
+    certificates: student.certificates,
+  };
+};
+
+// Perbarui data mahasiswa oleh Admin Kampus (menyentuh tabel Student & User).
+export const updateStudentByAdmin = async (
+  studentId: string,
+  data: any,
+) => {
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { id: true, userId: true, graduatedAt: true } as any,
+  });
+  if (!student) throw new HttpError(404, "Mahasiswa tidak ditemukan");
+
+  if (data.email) {
+    const taken = await prisma.user.findFirst({
+      where: { email: data.email, id: { not: (student as any).userId } },
+    });
+    if (taken) throw new HttpError(409, "Email sudah digunakan akun lain");
+  }
+  if (data.nim) {
+    const taken = await prisma.student.findFirst({
+      where: { nim: data.nim, id: { not: studentId } },
+    });
+    if (taken) throw new HttpError(409, "NIM sudah digunakan mahasiswa lain");
+  }
+
+  const studentData: any = {};
+  if (data.nim !== undefined) studentData.nim = data.nim;
+  if (data.major !== undefined) studentData.major = data.major;
+  if (data.faculty !== undefined) studentData.faculty = data.faculty;
+  if (data.entryYear !== undefined) studentData.entryYear = data.entryYear;
+  if (data.gpa !== undefined) studentData.gpa = data.gpa;
+
+  const userData: any = {};
+  if (data.name !== undefined) userData.name = data.name;
+  if (data.email !== undefined) userData.email = data.email;
+
+  if (data.status !== undefined) {
+    // Kelulusan dicatat lewat graduatedAt; akun alumni TETAP dapat masuk,
+    // sesuai alur pemulihan akun saat email kampus sudah dinonaktifkan.
+    if (data.status === "Graduated") {
+      if (!(student as any).graduatedAt) studentData.graduatedAt = new Date();
+    } else {
+      studentData.graduatedAt = null;
+    }
+    userData.status = data.status === "Inactive" ? USER_STATUS.SUSPENDED : USER_STATUS.ACTIVE;
+  }
+
+  await prisma.$transaction([
+    prisma.student.update({ where: { id: studentId }, data: studentData }),
+    ...(Object.keys(userData).length
+      ? [prisma.user.update({ where: { id: (student as any).userId }, data: userData })]
+      : []),
+  ]);
+
+  return getStudentProfile(studentId);
+};
+
+// Pilihan Fakultas -> Program Studi, diturunkan dari data mahasiswa yang ada.
+export const getFacultyMajorMap = async (universityId?: string) => {
+  const rows = await prisma.student.findMany({
+    where: universityId ? { universityId } : {},
+    select: { faculty: true, major: true } as any,
+  });
+  const map: Record<string, string[]> = {};
+  for (const r of rows as any[]) {
+    if (!r.faculty) continue;
+    const list = map[r.faculty] ?? [];
+    if (r.major && !list.includes(r.major)) list.push(r.major);
+    map[r.faculty] = list.sort();
+  }
+  return map;
 };

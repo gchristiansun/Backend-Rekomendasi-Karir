@@ -31,6 +31,9 @@ export const addStudentManual = async (
           nim: input.nim,
           major: input.major,
           semester: input.semester,
+          faculty: input.faculty,
+          entryYear: input.entryYear,
+          gpa: input.gpa,
           universityId,
         },
       },
@@ -56,6 +59,9 @@ interface CsvRow {
   nim?: string;
   major?: string;
   semester?: string;
+  faculty?: string;
+  entryyear?: string;   // header di-lowercase, jadi "entryYear" jadi "entryyear"
+  gpa?: string;
 }
 
 export const importStudentsCsv = async (
@@ -85,7 +91,7 @@ export const importStudentsCsv = async (
 
   const skipped: { row: number; reason: string }[] = [];
   const valid: {
-    name: string; email: string; nim: string; major?: string; semester?: number;
+    name: string; email: string; nim: string; major?: string; semester?: number; faculty?: string; entryYear?: number; gpa?: number;
   }[] = [];
   const seenEmail = new Set<string>();
   const seenNim = new Set<string>();
@@ -117,7 +123,25 @@ export const importStudentsCsv = async (
       if (Number.isFinite(n)) semester = n;
     }
 
-    valid.push({ name, email, nim, major: r.major?.trim() || undefined, semester });
+    let entryYear: number | undefined = undefined;
+    if (r.entryyear) {
+      const n = parseInt(r.entryyear, 10);
+      if (Number.isFinite(n)) entryYear = n;
+    }
+    let gpa: number | undefined = undefined;
+    if (r.gpa) {
+      const n = parseFloat(r.gpa);
+      if (Number.isFinite(n) && n >= 0 && n <= 4) gpa = n;
+    }
+
+    valid.push({
+      name, email, nim,
+      major: r.major?.trim() || undefined,
+      semester,
+      faculty: r.faculty?.trim() || undefined,
+      entryYear,
+      gpa,
+    });
   });
 
   // pre-hash password (= NIM) di LUAR transaksi.
@@ -126,6 +150,9 @@ export const importStudentsCsv = async (
     name: string;
     email: string;
     nim: string;
+    faculty?: string; 
+    entryYear?: number; 
+    gpa?: number;
     major?: string;
     semester?: number;
     hashed: string;
@@ -153,6 +180,9 @@ export const importStudentsCsv = async (
                   major: v.major,
                   semester: v.semester,
                   universityId,
+                  faculty: v.faculty,
+                  entryYear: v.entryYear,
+                  gpa: v.gpa,
                 },
               },
             },

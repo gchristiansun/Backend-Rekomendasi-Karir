@@ -8,11 +8,15 @@ import {
   removeMySkillHandler,
   getStudentByIdHandler,
   listStudentsHandler,
+  deleteStudentHandler,
+  studentAcademicDetailHandler,
+  facultyMajorMapHandler,
+  updateStudentByAdminHandler
 } from "./student.controller";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { authorizeRole } from "../../middleware/authorizeRole";
 import { validateRequest } from "../../middleware/validateRequest";
-import { updateStudentSchema, addSkillsSchema } from "./student.validation";
+import { updateStudentSchema, addSkillsSchema, updateStudentByAdminSchema } from "./student.validation";
 import { ROLES } from "../../constants";
 
 const router = Router();
@@ -39,5 +43,23 @@ router.get(
   authorizeRole(ROLES.ADMIN, ROLES.UNIVERSITY, ROLES.UNIVERSITY_STAFF, ROLES.COMPANY, ROLES.COMPANY_STAFF),
   getStudentByIdHandler,
 );
+
+router.delete(
+  "/:id",
+  authMiddleware,
+  authorizeRole(ROLES.UNIVERSITY, ROLES.ADMIN),
+  deleteStudentHandler,
+);
+
+router.get(
+  "/:id/detail",
+  authMiddleware,
+  authorizeRole(ROLES.UNIVERSITY, ROLES.UNIVERSITY_STAFF, ROLES.ADMIN),
+  studentAcademicDetailHandler,
+);
+
+// route literal sebelum yang ber-parameter
+router.get("/faculty-major-map", authMiddleware, authorizeRole(ROLES.UNIVERSITY, ROLES.UNIVERSITY_STAFF, ROLES.ADMIN), facultyMajorMapHandler);
+router.patch("/:id", authMiddleware, authorizeRole(ROLES.UNIVERSITY, ROLES.ADMIN), validateRequest(updateStudentByAdminSchema), updateStudentByAdminHandler);
 
 export default router;

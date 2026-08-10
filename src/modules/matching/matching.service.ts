@@ -8,6 +8,8 @@ import {
   rescaleSimilarity,
   isPassedGrade,
   parseVector,
+  gradeWeight, 
+  gradeLabel,
   type CloVector,
 } from "../../utils/semanticMatching";
 
@@ -500,45 +502,31 @@ export const getCandidateDetail = async (
   const requiredIds = new Set<string>((best?.required ?? []).map((r: any) => r.skillId));
   const totalRequired = requiredIds.size || 1;
 
+// Kontribusi per CLO hasil perhitungan semantik, dipetakan agar bisa
+  // dipasangkan dengan baris matkul di bawah.
+  const perCloMap = new Map<string, any>();
+  for (const p of best?.semantic?.perClo ?? []) perCloMap.set(p.cloId, p);
+
   const rows: any[] = [];
   for (const st of passed as any[]) {
     const subjectClos = closBySubject.get(st.subjectId) ?? [];
     if (subjectClos.length === 0) continue; // matkul tanpa CLO tidak dianalisis
 
-    // cadangan: porsi keahlian lowongan yang ditutup matkul ini
+    // cadangan bila embedding belum tersedia
     const subjectSkills = (st.subject?.skills ?? []).map((ss: any) => ss.skillId);
     const covering = subjectSkills.filter((id: string) => requiredIds.has(id));
     const skorSkill = Math.round((covering.length / totalRequired) * 100);
 
+    const bobot = gradeWeight(st.score, st.grade);
+    const labelNilai = gradeLabel(st.score, st.grade);
+
     subjectClos.forEach((clo: any, i: number) => {
-      const cloVec = parseVector(clo.embedding);
-
-      let skor = skorSkill;
-      let method: "semantic" | "skill" = "skill";
-      let matchedRequirement: string | null = null;
-
-      if (cloVec && reqVectors.length > 0) {
-        let bestSim = -1;
-        let bestText: string | null = null;
-        for (const r of reqVectors) {
-          // kedua vektor sudah ternormalisasi, jadi dot product = cosine
-          let sim = 0;
-          for (let k = 0; k < cloVec.length; k++) sim += cloVec[k] * r.vec[k];
-          if (sim > bestSim) {
-            bestSim = sim;
-            bestText = r.requirement;
-          }
-        }
-        skor = Math.round(rescaleSimilarity(bestSim) * 100);
-        method = "semantic";
-        matchedRequirement = bestText;
-      }
+      const p = perCloMap.get(clo.id);
 
       rows.push({
         matkul: st.subject?.name ?? "-",
         subjectCode: st.subject?.code ?? "-",
         cloCode: clo.code ?? clo.kode ?? `CLO${i + 1}`,
-        // deskripsi memakai hasil parafrase CLO
         deskripsi:
           clo.paraphrase ??
           clo.parafrase ??
@@ -546,11 +534,15 @@ export const getCandidateDetail = async (
           clo.deskripsi ??
           clo.text ??
           "Parafrase CLO belum tersedia.",
-        nilai: st.grade ?? (typeof st.score === "number" ? String(st.score) : "-"),
+        nilai: labelNilai,
         semester: st.semester,
-        skor,
-        method,
-        matchedRequirement,
+        // bobot dihitung langsung dari nilai matkul baris ini, tidak mengandalkan
+        // nilai yang menempel di vektor CLO
+        skor: Math.round((p ? p.similarityScore : skorSkill) * bobot),
+        skorKemiripan: p ? p.similarityScore : skorSkill,
+        bobotNilai: bobot,    
+        method: p ? "semantic" : "skill",
+        matchedRequirement: p?.matchedRequirement ?? null,
       });
     });
   }
@@ -562,9 +554,16 @@ export const getCandidateDetail = async (
         a.matkul.localeCompare(b.matkul) ||
         a.cloCode.localeCompare(b.cloCode),
     )
-    .slice(0, 20)
+    .slice(0, 50)
     .map((item, i) => ({ id: i + 1, ...item }));
 
+    // Skor akhir = rata-rata kontribusi seluruh CLO yang dianalisis, sehingga
+  // angka di layar dapat diperiksa ulang dengan menjumlahkan baris di bawahnya.
+  const skorAkhir =
+    rows.length > 0
+      ? Math.round(rows.reduce((acc: number, r: any) => acc + r.skor, 0) / rows.length)
+      : best?.finalScore ?? 0;
+      
   return {
     candidate: {
       studentId: student.id,
@@ -578,7 +577,7 @@ export const getCandidateDetail = async (
       bio: (student as any).bio ?? null,
       university: student.university?.name ?? null,
       skills: student.skills.map((s: any) => s.skill),
-      matchScore: best?.finalScore ?? 0,
+      matchScore: skorAkhir,
       matchScoreRule: best?.match?.score ?? 0,
       matchMethod: best?.semantic ? "semantic" : "skill",
       coveredRequirements: best?.semantic?.covered ?? null,

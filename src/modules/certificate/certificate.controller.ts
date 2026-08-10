@@ -2,11 +2,13 @@ import { Request, Response } from "express";
 import * as certService from "./certificate.service";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { sendSuccess, sendCreated } from "../../utils/apiResponse";
-import { getStudentByUserId, getUniversityMembership } from "../../utils/context";
+import { getStudentByUserId, getUniversityMembership,  } from "../../utils/context";
 import { HttpError } from "../../utils/httpError";
 import { ROLES } from "../../constants";
 import { supabase, SUPABASE_BUCKET } from "../../config/supabase";
 import { randomUUID } from "crypto";
+import prisma from "../../config/prisma";
+import * as certificateService from "./certificate.service";
 import path from "path";
 
 // Parse field "skills" dari multipart (bisa JSON array ATAU dipisah koma).
@@ -97,4 +99,67 @@ export const approveCertificateHandler = asyncHandler(async (req: Request, res: 
 export const rejectCertificateHandler = asyncHandler(async (req: Request, res: Response) => {
   const cert = await certService.rejectCertificate(String(req.params.id), req.user!.id, req.body?.note);
   return sendSuccess(res, cert, "Sertifikat ditolak");
+});
+
+// GET /certificates - seluruh sertifikat (Admin Kampus / Kaprodi / Superadmin)
+export const listCertificatesHandler = asyncHandler(async (req: Request, res: Response) => {
+  // Admin Kampus & Kaprodi hanya melihat sertifikat mahasiswa kampusnya sendiri.
+  let universityId: string | undefined;
+  if (req.user!.role === ROLES.UNIVERSITY || req.user!.role === ROLES.UNIVERSITY_STAFF) {
+    const member = await prisma.universityMember.findFirst({
+      where: { userId: req.user!.id },
+      select: { universityId: true },
+    });
+    if (!member) throw new HttpError(403, "Anda tidak terhubung dengan universitas mana pun");
+    universityId = member.universityId;
+  }
+
+  const certificates = await certificateService.listCertificates({
+    status: req.query.status ? String(req.query.status) : undefined,
+    universityId,
+  });
+  return sendSuccess(res, certificates, "Daftar sertifikat");
+});
+
+// Admin Kampus & Kaprodi hanya boleh menangani sertifikat mahasiswa kampusnya.
+const assertKampusBerhak = async (req: Request, universityId?: string | null) => {
+  if (req.user!.role !== ROLES.UNIVERSITY && req.user!.role !== ROLES.UNIVERSITY_STAFF) return;
+  const member = await prisma.universityMember.findFirst({
+    where: { userId: req.user!.id },
+    select: { universityId: true },
+  });
+  if (!member || member.universityId !== universityId) {
+    throw new HttpError(403, "Sertifikat ini bukan dari universitas Anda");
+  }
+};
+
+// GET /certificates/:id
+export const certificateDetailHandler = asyncHandler(async (req: Request, res: Response) => {
+  const cert = await certificateService.getCertificateById(String(req.params.id));
+  if (!cert) throw new HttpError(404, "Sertifikat tidak ditemukan");
+  await assertKampusBerhak(req, (cert as any).student?.universityId);
+  return sendSuccess(res, cert, "Detail sertifikat");
+});
+
+// PATCH /certificates/:id/skills
+export const updateCertificateSkillsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const cert = await certificateService.getCertificateById(String(req.params.id));
+  if (!cert) throw new HttpError(404, "Sertifikat tidak ditemukan");
+  await assertKampusBerhak(req, (cert as any).student?.universityId);
+
+  const updated = await certificateService.updateCertificateSkills(
+    String(req.params.id),
+    req.body.skills ?? [],
+  );
+  return sendSuccess(res, updated, "Keahlian sertifikat diperbarui");
+});
+
+// PATCH /certificates/:id/pending
+export const resetCertificateHandler = asyncHandler(async (req: Request, res: Response) => {
+  const cert = await certificateService.getCertificateById(String(req.params.id));
+  if (!cert) throw new HttpError(404, "Sertifikat tidak ditemukan");
+  await assertKampusBerhak(req, (cert as any).student?.universityId);
+
+  const updated = await certificateService.setCertificatePending(String(req.params.id));
+  return sendSuccess(res, updated, "Status sertifikat dikembalikan ke menunggu verifikasi");
 });

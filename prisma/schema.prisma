@@ -76,8 +76,12 @@ model Student {
     semester     Int?
     gpa          Float?
     bio          String?
+    faculty     String?     // fakultas
+    entryYear   Int?        // angkatan
+    graduatedAt DateTime?   // penanda kelulusan
     created_at   DateTime @default(now())
     updated_at   DateTime @updatedAt
+    
 
     user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
     university University? @relation(fields: [universityId], references: [id], onDelete: SetNull)
@@ -87,6 +91,7 @@ model Student {
     certificates Certificate[]
     applications Application[]
     favorites    JobFavorite[]
+    cloGrades CLOGrade[]
     jobViews     JobView[]
     invitations JobInvitation[]
 
@@ -210,10 +215,13 @@ model CLO {
     text       String
     paraphrase String?
     embedding  String?
+    weight Int?
+    skills String?  
+    
     created_at DateTime @default(now())
 
     subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-
+    grades CLOGrade[]
     @@index([subjectId])
 }
 
@@ -469,4 +477,24 @@ model JobInvitation {
   @@unique([jobId, studentId])
   @@index([studentId])
   @@index([jobId])
+}
+
+// ----------------------------------------------------------------------------
+// NILAI PER CAPAIAN PEMBELAJARAN (CLO)
+// Nilai akhir mata kuliah dihitung dari nilai-nilai ini menurut bobot CLO,
+// lalu disimpan ke SubjectTaken agar mesin OBE lama tetap berjalan.
+// ----------------------------------------------------------------------------
+model CLOGrade {
+  id         String   @id @default(ulid())
+  studentId  String
+  cloId      String
+  score      Float
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  clo     CLO     @relation(fields: [cloId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, cloId])
+  @@index([cloId])
 }

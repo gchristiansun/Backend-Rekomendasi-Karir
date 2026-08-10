@@ -127,3 +127,105 @@ export const rejectCertificate = async (id: string, reviewerId: string, note?: s
   });
   return updated;
 };
+
+// Daftar sertifikat untuk halaman verifikasi kampus.
+// Tanpa filter status = seluruh status, agar tab dan hitungannya bisa dihitung sekali muat.
+export const listCertificates = async (opts: { status?: string; universityId?: string }) => {
+  const where: any = {};
+  if (opts.status) where.status = opts.status;
+  if (opts.universityId) where.student = { universityId: opts.universityId };
+
+  return prisma.certificate.findMany({
+    where,
+    include: {
+      student: {
+        select: {
+          id: true,
+          nim: true,
+          major: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+      },
+    },
+    orderBy: { created_at: "desc" },
+  });
+};
+
+export const getCertificateById = (id: string) =>
+  prisma.certificate.findUnique({
+    where: { id },
+    include: {
+      student: {
+        select: {
+          id: true, nim: true, major: true, universityId: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+      },
+      skills: { include: { skill: { select: { id: true, name: true } } } },
+    },
+  });
+
+// Ganti seluruh keahlian sertifikat. Berlaku untuk pemberian skill saat disetujui.
+export const updateCertificateSkills = async (id: string, skillNames: string[]) => {
+  const cert = await prisma.certificate.findUnique({ where: { id } });
+  if (!cert) throw new HttpError(404, "Sertifikat tidak ditemukan");
+
+  const skills = await findOrCreateByNames(skillNames);
+  await prisma.certificate.update({
+    where: { id },
+    data: { skills: { deleteMany: {}, create: skills.map((s) => ({ skillId: s.id })) } },
+  });
+  return getCertificateById(id);
+};
+
+// Cabut keahlian yang tadinya diberikan sertifikat ini, kecuali masih
+// dijustifikasi sertifikat lain yang sudah disetujui.
+const revokeCertificateSkills = async (
+  tx: any,
+  studentId: string,
+  skillIds: string[],
+  exceptCertId: string,
+) => {
+  if (skillIds.length === 0) return;
+
+  const lain = await tx.certificate.findMany({
+    where: { studentId, status: CERTIFICATE_STATUS.APPROVED, id: { not: exceptCertId } },
+    include: { skills: { select: { skillId: true } } },
+  });
+  const masihDijustifikasi = new Set<string>();
+  for (const c of lain as any[]) for (const s of c.skills) masihDijustifikasi.add(s.skillId);
+
+  const dicabut = skillIds.filter((id) => !masihDijustifikasi.has(id));
+  if (dicabut.length === 0) return;
+
+  // Hanya yang bersumber sertifikat; keahlian dari mata kuliah tidak tersentuh.
+  await tx.studentSkill.deleteMany({
+    where: { studentId, skillId: { in: dicabut }, source: SKILL_SOURCE.CERTIFICATE },
+  });
+};
+
+// Kembalikan ke status menunggu, sekaligus mencabut keahlian bila sebelumnya disetujui.
+export const setCertificatePending = async (id: string) => {
+  const cert = await prisma.certificate.findUnique({
+    where: { id },
+    include: { skills: { select: { skillId: true } } },
+  });
+  if (!cert) throw new HttpError(404, "Sertifikat tidak ditemukan");
+
+  const sebelumnyaDisetujui =
+    String(cert.status).toLowerCase() === String(CERTIFICATE_STATUS.APPROVED).toLowerCase();
+
+  await prisma.$transaction(async (tx: any) => {
+    await tx.certificate.update({ where: { id }, data: { status: CERTIFICATE_STATUS.PENDING } });
+    if (sebelumnyaDisetujui) {
+      await revokeCertificateSkills(
+        tx,
+        cert.studentId,
+        (cert as any).skills.map((s: any) => s.skillId),
+        id,
+      );
+    }
+  });
+
+  return getCertificateById(id);
+};

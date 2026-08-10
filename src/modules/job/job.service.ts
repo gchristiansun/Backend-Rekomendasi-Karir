@@ -59,11 +59,12 @@ const collectSkillFreq = (
 // tersimpan agar id requirement sudah ada. Kegagalan tidak membatalkan
 // pembuatan lowongan - embedding bisa diisi belakangan lewat skrip backfill.
 const fillRequirementEmbeddings = async (requirements: any[]) => {
+  // Tidak ada requirement, tidak perlu memanggil AI service.
   if (!requirements || requirements.length === 0) return;
-
+  // Ambil embedding dari AI service. Jika gagal, log saja.
   const vectors = await embedTexts(requirements.map((r: any) => r.requirement));
   if (!vectors || vectors.length !== requirements.length) return;
-
+  // Simpan embedding ke database.
   await Promise.all(
     requirements.map((r: any, i: number) =>
       prisma.jobRequirement.update({

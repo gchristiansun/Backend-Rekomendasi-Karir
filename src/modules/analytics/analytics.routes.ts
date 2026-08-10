@@ -3,6 +3,7 @@ import {
   skillTrendsHandler,
   systemOverviewHandler,
   applicationStatsHandler,
+  universityDashboardHandler
 } from "./analytics.controller";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { authorizeRole } from "../../middleware/authorizeRole";
@@ -23,5 +24,12 @@ router.get("/overview", authMiddleware, authorizeRole(ROLES.ADMIN), systemOvervi
 
 // Distribusi status lamaran: Admin Utama (+ bisa ditambah role lain nanti).
 router.get("/applications", authMiddleware, authorizeRole(ROLES.ADMIN), applicationStatsHandler);
+
+router.get(
+  "/university/dashboard",
+  authMiddleware,
+  authorizeRole(ROLES.UNIVERSITY, ROLES.UNIVERSITY_STAFF),
+  universityDashboardHandler,
+);
 
 export default router;
