@@ -145,6 +145,18 @@ export const rejectCompanyHandler = asyncHandler(async (req: Request, res: Respo
   return sendSuccess(res, company, "Pendaftaran ditolak dan pemberitahuan telah dikirim");
 });
 
+// PATCH /companies/:id (Superadmin) - edit profil perusahaan dari halaman verifikasi
+export const updateCompanyByAdminHandler = asyncHandler(async (req: Request, res: Response) => {
+  const company = await companyService.updateCompanyByAdmin(String(req.params.id), req.body);
+  return sendSuccess(res, company, "Profil perusahaan diperbarui oleh admin");
+});
+
+// PATCH /companies/:id/reevaluate (Superadmin) - cabut status, kembali ke antrean pending
+export const reevaluateCompanyHandler = asyncHandler(async (req: Request, res: Response) => {
+  const company = await companyService.reevaluateCompany(String(req.params.id));
+  return sendSuccess(res, company, "Status perusahaan dikembalikan ke pending untuk evaluasi ulang");
+});
+
 // PATCH /companies/me/documents (multipart: izinUsaha, suratResmi)
 export const updateCompanyDocsHandler = asyncHandler(async (req: Request, res: Response) => {
   const member = await getCompanyMembership(req.user!.id);

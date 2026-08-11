@@ -3,7 +3,13 @@ import {
   skillTrendsHandler,
   systemOverviewHandler,
   applicationStatsHandler,
-  universityDashboardHandler
+  universityDashboardHandler,
+  activityTrendsHandler,
+  activityLogsHandler,
+  recentSystemLogsHandler,
+  masterCoursesHandler,
+  masterIndustriesHandler,
+  masterStatsHandler,
 } from "./analytics.controller";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { authorizeRole } from "../../middleware/authorizeRole";
@@ -31,5 +37,14 @@ router.get(
   authorizeRole(ROLES.UNIVERSITY, ROLES.UNIVERSITY_STAFF),
   universityDashboardHandler,
 );
+
+// ===== Khusus Super Admin (dashboard, log, master data) =====
+const ADMIN_ONLY = authorizeRole(ROLES.ADMIN);
+router.get("/activity-trends", authMiddleware, ADMIN_ONLY, activityTrendsHandler);
+router.get("/activity-logs", authMiddleware, ADMIN_ONLY, activityLogsHandler);
+router.get("/recent-logs", authMiddleware, ADMIN_ONLY, recentSystemLogsHandler);
+router.get("/master/courses", authMiddleware, ADMIN_ONLY, masterCoursesHandler);
+router.get("/master/industries", authMiddleware, ADMIN_ONLY, masterIndustriesHandler);
+router.get("/master/stats", authMiddleware, ADMIN_ONLY, masterStatsHandler);
 
 export default router;

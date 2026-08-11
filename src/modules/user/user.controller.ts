@@ -44,6 +44,11 @@ export const getUserHandler = asyncHandler(async (req: Request, res: Response) =
   return sendSuccess(res, user, "Detail pengguna");
 });
 
+export const updateUserHandler = asyncHandler(async (req: Request, res: Response) => {
+  const user = await userService.updateUserByAdmin(String(req.params.id), req.body);
+  return sendSuccess(res, user, "Data pengguna diperbarui");
+});
+
 export const suspendUserHandler = asyncHandler(async (req: Request, res: Response) => {
   const user = await userService.setUserStatus(String(req.params.id), USER_STATUS.SUSPENDED);
   return sendSuccess(res, user, "Pengguna disuspend");

@@ -62,7 +62,8 @@ export const createCompanyAccount = async (input: RegisterUserInput) => {
 export const saveRefreshToken = async (userId: string, refreshToken: string) => {
   return prisma.user.update({
     where: { id: userId },
-    data: { refresh_token: refreshToken },
+    // login sukses -> catat juga waktu login terakhir (dipakai halaman Super Admin)
+    data: { refresh_token: refreshToken, lastLoginAt: new Date() },
   });
 };
 

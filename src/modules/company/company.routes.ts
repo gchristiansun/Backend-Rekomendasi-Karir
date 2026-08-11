@@ -9,6 +9,8 @@ import {
   uploadLogoHandler,
   companyReviewHandler,
   updateCompanyDocsHandler,
+  updateCompanyByAdminHandler,
+  reevaluateCompanyHandler,
 } from "./company.controller";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { authorizeRole } from "../../middleware/authorizeRole";
@@ -32,19 +34,6 @@ router.patch(
   uploadLogo.single("logo"),
   uploadLogoHandler,
 );
-const ADMIN = authorizeRole(ROLES.ADMIN);
-
-router.get("/:id/review", authMiddleware, ADMIN, companyReviewHandler);
-router.patch("/:id/verify", authMiddleware, ADMIN, validateRequest(verifyCompanySchema), verifyCompanyHandler);
-router.patch("/:id/reject", authMiddleware, ADMIN, validateRequest(rejectCompanySchema), rejectCompanyHandler);
-
-// Admin Utama: kelola & verifikasi
-router.get("/", authMiddleware, authorizeRole(ROLES.ADMIN), listCompaniesHandler);
-router.get("/:id", authMiddleware, authorizeRole(ROLES.ADMIN), getCompanyHandler);
-
-
-export default router;
-
 // route /me/... harus di atas /:id
 router.patch(
   "/me/documents",
@@ -56,3 +45,18 @@ router.patch(
   ]),
   updateCompanyDocsHandler,
 );
+
+const ADMIN = authorizeRole(ROLES.ADMIN);
+
+router.get("/:id/review", authMiddleware, ADMIN, companyReviewHandler);
+router.patch("/:id/verify", authMiddleware, ADMIN, validateRequest(verifyCompanySchema), verifyCompanyHandler);
+router.patch("/:id/reject", authMiddleware, ADMIN, validateRequest(rejectCompanySchema), rejectCompanyHandler);
+router.patch("/:id/reevaluate", authMiddleware, ADMIN, reevaluateCompanyHandler);
+router.patch("/:id", authMiddleware, ADMIN, validateRequest(updateCompanySchema), updateCompanyByAdminHandler);
+
+// Admin Utama: kelola & verifikasi
+router.get("/", authMiddleware, authorizeRole(ROLES.ADMIN), listCompaniesHandler);
+router.get("/:id", authMiddleware, authorizeRole(ROLES.ADMIN), getCompanyHandler);
+
+
+export default router;

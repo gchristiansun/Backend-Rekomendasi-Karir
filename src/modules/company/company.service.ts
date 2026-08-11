@@ -18,7 +18,17 @@ export const listCompanies = async (opts: {
     prisma.company.count({ where }),
     prisma.company.findMany({
       where,
-      include: { _count: { select: { jobs: true, members: true } } },
+      include: {
+        _count: { select: { jobs: true, members: true } },
+        // kontak pendaftar (ditampilkan di tabel verifikasi Super Admin)
+        members: {
+          include: {
+            user: { select: { id: true, name: true, email: true, phone: true } },
+          },
+          orderBy: { created_at: "asc" },
+          take: 1,
+        },
+      },
       orderBy: { created_at: "desc" },
       skip: opts.skip,
       take: opts.take,
@@ -151,6 +161,36 @@ export const rejectCompany = async (companyId: string, reason: string) => {
   });
 
   return { company: updated, contacts: collectMemberContacts(company) };
+};
+
+// ============================================================
+// EDIT OLEH SUPER ADMIN
+// Berbeda dengan updateCompany (self-service): admin boleh mengubah
+// seluruh field, termasuk NIB, tanpa terkunci status verifikasi.
+// ============================================================
+export const updateCompanyByAdmin = async (companyId: string, data: any) => {
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  if (!company) throw new HttpError(404, "Perusahaan tidak ditemukan");
+  return prisma.company.update({ where: { id: companyId }, data });
+};
+
+// Kembalikan perusahaan (terverifikasi/ditolak) ke antrean verifikasi.
+export const reevaluateCompany = async (companyId: string) => {
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  if (!company) throw new HttpError(404, "Perusahaan tidak ditemukan");
+  if (company.status === COMPANY_STATUS.PENDING) {
+    throw new HttpError(400, "Perusahaan ini sudah berstatus pending");
+  }
+
+  return prisma.company.update({
+    where: { id: companyId },
+    data: {
+      status: COMPANY_STATUS.PENDING,
+      verifiedAt: null,
+      rejectionReason: null,
+      rejectedAt: null,
+    },
+  });
 };
 
 // Perbarui dokumen legal dan ajukan verifikasi ulang.

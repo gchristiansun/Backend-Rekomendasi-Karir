@@ -68,6 +68,25 @@ export const listUsers = async (opts: {
       select: {
         id: true, name: true, email: true, phone: true,
         role: true, status: true, created_at: true, updated_at: true,
+        // relasi untuk tab Manajemen Pengguna (Super Admin)
+        student: {
+          select: {
+            id: true, nim: true, major: true,
+            university: { select: { id: true, name: true } },
+          },
+        },
+        universityMember: {
+          select: {
+            position: true, nip: true,
+            university: { select: { id: true, name: true } },
+          },
+        },
+        companyMember: {
+          select: {
+            position: true, nip: true,
+            company: { select: { id: true, name: true } },
+          },
+        },
       },
       orderBy: { created_at: "desc" },
       skip: opts.skip,
@@ -85,6 +104,59 @@ export const getUserById = (id: string) =>
       role: true, status: true, created_at: true,
     },
   });
+
+// Update profil pengguna oleh Super Admin (nama/email/telepon/status +
+// field turunan: jurusan mahasiswa, NIP anggota kampus/perusahaan).
+export const updateUserByAdmin = async (
+  id: string,
+  input: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    status?: string;
+    major?: string;
+    nip?: string;
+  },
+) => {
+  const user = await prisma.user.findUnique({
+    where: { id },
+    include: { student: true, universityMember: true, companyMember: true },
+  });
+  if (!user) throw new HttpError(404, "User tidak ditemukan");
+  if (user.role === ROLES.ADMIN) {
+    throw new HttpError(403, "Akun Admin Utama tidak dapat diubah");
+  }
+
+  if (input.email && input.email !== user.email) {
+    const emailUsed = await prisma.user.findUnique({ where: { email: input.email } });
+    if (emailUsed) throw new HttpError(409, "Email sudah dipakai akun lain");
+  }
+
+  return prisma.user.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.email !== undefined ? { email: input.email } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.major !== undefined && user.student
+        ? { student: { update: { major: input.major } } }
+        : {}),
+      ...(input.nip !== undefined && user.universityMember
+        ? { universityMember: { update: { nip: input.nip } } }
+        : {}),
+      ...(input.nip !== undefined && user.companyMember
+        ? { companyMember: { update: { nip: input.nip } } }
+        : {}),
+    },
+    select: {
+      id: true, name: true, email: true, phone: true, role: true, status: true,
+      student: { select: { major: true } },
+      universityMember: { select: { nip: true } },
+      companyMember: { select: { nip: true } },
+    },
+  });
+};
 
 // Ubah status akun (suspend / activate / soft-delete).
 export const setUserStatus = async (id: string, status: string) => {
