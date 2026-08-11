@@ -385,16 +385,17 @@ export const listCompanyCandidates = async (
   return { candidates, jobs: jobOptions };
 };
 
+
 // ============================================================
-// Detail kandidat: profil akademik + analisis kesesuaian PER CLO.
-// Satu baris = satu CLO, jadi matkul dengan beberapa CLO muncul
-// beberapa kali (Algoritma Pemrograman CLO1, CLO3, dst).
+// Detail kandidat: profil + analisis kompetensi per lowongan.
+// Susunan: lowongan -> tanggung jawab -> CLO yang menutupinya.
 //
-// Skor per CLO:
-//  - semantik  : cosine(CLO.embedding, JobRequirement.embedding), diskalakan
-//                dengan aturan yang sama seperti skor global
-//  - cadangan  : porsi keahlian lowongan yang ditutup matkul asal CLO
+// kontribusi CLO       = kemiripan semantik (diskalakan) x bobot nilai matkul
+// skor tanggung jawab  = kontribusi tertinggi di antara CLO-nya
+// skor lowongan        = rata-rata skor seluruh tanggung jawab
 // ============================================================
+const CLO_PER_REQUIREMENT = 3; // jumlah CLO teratas yang ditampilkan per tanggung jawab
+
 export const getCandidateDetail = async (
   companyId: string,
   studentId: string,
@@ -410,18 +411,12 @@ export const getCandidateDetail = async (
         select: { id: true, title: true, issuer: true, status: true, fileUrl: true },
       },
       subjectsTaken: {
-        include: {
-          subject: {
-            include: { skills: { include: { skill: { select: { id: true, name: true } } } } },
-          },
-        },
-        orderBy: { semester: "asc" },
+        select: { subjectId: true, score: true, grade: true, semester: true },
       },
     },
   });
   if (!student) return null;
 
-  // Lowongan pembanding: yang diminta, atau yang paling cocok di antara lowongan aktif.
   const jobs = await prisma.job.findMany({
     where: {
       companyId,
@@ -435,41 +430,86 @@ export const getCandidateDetail = async (
 
   const owned = student.skills.map((s: any) => s.skillId);
 
-  // CLO mahasiswa dipakai untuk memilih lowongan terbaik secara semantik,
-  // agar konsisten dengan daftar Rekomendasi Kandidat.
+  // Vektor CLO mahasiswa (hanya dari matkul yang lulus), lengkap dengan
+  // bobot nilai dan nama mata kuliahnya.
   const bySubject = await getCloVectorsBySubject();
-  const studentClos = collectStudentCloVectors(
-    (student.subjectsTaken ?? []).map((st: any) => ({
-      subjectId: st.subjectId,
-      score: st.score,
-      grade: st.grade,
-    })),
-    bySubject,
-  );
-  const jobsWithVec = (jobs as any[]).filter((j) => toRequirementVectors(j).length > 0);
-  const pool = studentClos.length > 0 && jobsWithVec.length > 0 ? jobsWithVec : (jobs as any[]);
+  const cloVecs = collectStudentCloVectors(student.subjectsTaken, bySubject);
 
-  let best: any = null;
-  for (const job of pool) {
-    const required = job.skills.map((js: any) => ({
-      skillId: js.skillId,
-      name: js.skill.name,
-      weight: js.weight,
-    }));
-    const ruleMatch = computeMatch(owned, required);
+  const subjectIds = Array.from(new Set(cloVecs.map((c) => c.subjectId)));
+  const subjects = subjectIds.length
+    ? await prisma.subject.findMany({
+        where: { id: { in: subjectIds } },
+        select: { id: true, name: true, code: true },
+      })
+    : [];
+  const subjectById = new Map(subjects.map((s: any) => [s.id, s]));
 
-    const reqVecs = toRequirementVectors(job);
-    const semantic =
-      reqVecs.length > 0 && studentClos.length > 0
-        ? computeSemanticMatch(studentClos, reqVecs)
-        : null;
+  // Susun analisis per lowongan
+  const kompetensiGroups = (jobs as any[]).map((job) => {
+    const reqs = (job.requirements ?? []).map((r: any) => {
+      const reqVec = parseVector(r.embedding);
 
-    const finalScore = semantic ? semantic.score : ruleMatch.score;
+      const cloItems = reqVec
+        ? cloVecs
+            .map((clo) => {
+              let sim = 0;
+              for (let i = 0; i < clo.vec.length; i++) sim += clo.vec[i] * reqVec[i];
+              const skorKemiripan = Math.round(rescaleSimilarity(sim) * 100);
+              const bobot = clo.weight ?? 1;
+              return {
+                id: clo.cloId,
+                kode: clo.code,
+                deskripsi: clo.text || "Parafrase CLO belum tersedia.",
+                matkul: subjectById.get(clo.subjectId)?.name ?? "-",
+                nilai: clo.gradeLabel ?? "-",
+                skorKemiripan,
+                bobotNilai: bobot,
+                kontribusi: Math.round(skorKemiripan * bobot),
+              };
+            })
+            .sort((a, b) => b.kontribusi - a.kontribusi)
+            .slice(0, CLO_PER_REQUIREMENT)
+        : [];
 
-    if (!best || finalScore > best.finalScore) {
-      best = { job, match: ruleMatch, required, semantic, finalScore, reqVecs };
-    }
-  }
+      return {
+        id: r.id,
+        deskripsi: r.requirement,
+        // tanggung jawab dianggap tertutup sebaik CLO terbaiknya
+        matchScore: cloItems.length > 0 ? cloItems[0].kontribusi : 0,
+        cloItems,
+      };
+    });
+
+    const matchScore =
+      reqs.length > 0
+        ? Math.round(reqs.reduce((a: number, r: any) => a + r.matchScore, 0) / reqs.length)
+        : 0;
+
+    return {
+      id: job.id,
+      kategori: job.title,
+      matchScore,
+      tanggungJawabList: reqs,
+    };
+  });
+
+// Lowongan diurutkan dari kecocokan tertinggi ke terendah, sehingga yang
+  // paling relevan tampil paling atas sekaligus menjadi roleMatch kandidat.
+  kompetensiGroups.sort((a, b) => b.matchScore - a.matchScore);
+  const best = kompetensiGroups[0] ?? null;
+  
+  const bestJob = best ? (jobs as any[]).find((j) => j.id === best.id) : null;
+
+  const ruleMatch = bestJob
+    ? computeMatch(
+        owned,
+        bestJob.skills.map((js: any) => ({
+          skillId: js.skillId,
+          name: js.skill.name,
+          weight: js.weight,
+        })),
+      )
+    : null;
 
   const application = await prisma.application.findFirst({
     where: { studentId, job: { companyId, ...(opts.jobId ? { id: opts.jobId } : {}) } },
@@ -477,93 +517,6 @@ export const getCandidateDetail = async (
     orderBy: { created_at: "desc" },
   });
 
-  // ---------- Kumpulkan CLO dari matkul yang SUDAH LULUS ----------
-  const passed = student.subjectsTaken.filter((st: any) => isPassedGrade(st.score, st.grade));
-  const subjectIds = passed.map((st: any) => st.subjectId);
-
-  // Diambil langsung (bukan dari cache) supaya CLO yang belum punya embedding
-  // tetap tampil dengan skor cadangan berbasis keahlian.
-  const clos = subjectIds.length
-    ? await prisma.cLO.findMany({
-        where: { subjectId: { in: subjectIds } },
-        orderBy: { created_at: "asc" },
-      })
-    : [];
-
-  const closBySubject = new Map<string, any[]>();
-  for (const c of clos as any[]) {
-    const list = closBySubject.get(c.subjectId) ?? [];
-    list.push(c);
-    closBySubject.set(c.subjectId, list);
-  }
-
-  const reqVectors: { requirement: string; vec: number[] }[] = best?.reqVecs ?? [];
-
-  const requiredIds = new Set<string>((best?.required ?? []).map((r: any) => r.skillId));
-  const totalRequired = requiredIds.size || 1;
-
-// Kontribusi per CLO hasil perhitungan semantik, dipetakan agar bisa
-  // dipasangkan dengan baris matkul di bawah.
-  const perCloMap = new Map<string, any>();
-  for (const p of best?.semantic?.perClo ?? []) perCloMap.set(p.cloId, p);
-
-  const rows: any[] = [];
-  for (const st of passed as any[]) {
-    const subjectClos = closBySubject.get(st.subjectId) ?? [];
-    if (subjectClos.length === 0) continue; // matkul tanpa CLO tidak dianalisis
-
-    // cadangan bila embedding belum tersedia
-    const subjectSkills = (st.subject?.skills ?? []).map((ss: any) => ss.skillId);
-    const covering = subjectSkills.filter((id: string) => requiredIds.has(id));
-    const skorSkill = Math.round((covering.length / totalRequired) * 100);
-
-    const bobot = gradeWeight(st.score, st.grade);
-    const labelNilai = gradeLabel(st.score, st.grade);
-
-    subjectClos.forEach((clo: any, i: number) => {
-      const p = perCloMap.get(clo.id);
-
-      rows.push({
-        matkul: st.subject?.name ?? "-",
-        subjectCode: st.subject?.code ?? "-",
-        cloCode: clo.code ?? clo.kode ?? `CLO${i + 1}`,
-        deskripsi:
-          clo.paraphrase ??
-          clo.parafrase ??
-          clo.description ??
-          clo.deskripsi ??
-          clo.text ??
-          "Parafrase CLO belum tersedia.",
-        nilai: labelNilai,
-        semester: st.semester,
-        // bobot dihitung langsung dari nilai matkul baris ini, tidak mengandalkan
-        // nilai yang menempel di vektor CLO
-        skor: Math.round((p ? p.similarityScore : skorSkill) * bobot),
-        skorKemiripan: p ? p.similarityScore : skorSkill,
-        bobotNilai: bobot,    
-        method: p ? "semantic" : "skill",
-        matchedRequirement: p?.matchedRequirement ?? null,
-      });
-    });
-  }
-
-  const cloAnalysis = rows
-    .sort(
-      (a, b) =>
-        b.skor - a.skor ||
-        a.matkul.localeCompare(b.matkul) ||
-        a.cloCode.localeCompare(b.cloCode),
-    )
-    .slice(0, 50)
-    .map((item, i) => ({ id: i + 1, ...item }));
-
-    // Skor akhir = rata-rata kontribusi seluruh CLO yang dianalisis, sehingga
-  // angka di layar dapat diperiksa ulang dengan menjumlahkan baris di bawahnya.
-  const skorAkhir =
-    rows.length > 0
-      ? Math.round(rows.reduce((acc: number, r: any) => acc + r.skor, 0) / rows.length)
-      : best?.finalScore ?? 0;
-      
   return {
     candidate: {
       studentId: student.id,
@@ -577,19 +530,16 @@ export const getCandidateDetail = async (
       bio: (student as any).bio ?? null,
       university: student.university?.name ?? null,
       skills: student.skills.map((s: any) => s.skill),
-      matchScore: skorAkhir,
-      matchScoreRule: best?.match?.score ?? 0,
-      matchMethod: best?.semantic ? "semantic" : "skill",
-      coveredRequirements: best?.semantic?.covered ?? null,
-      totalRequirements: best?.semantic?.totalRequirements ?? null,
-      roleMatch: best?.job?.title ?? "-",
-      jobId: best?.job?.id ?? null,
-      matchedSkills: best?.match?.matchedSkills ?? [],
-      gapSkills: best?.match?.missingSkills ?? [],
+      matchScore: best?.matchScore ?? 0,
+      matchScoreRule: ruleMatch?.score ?? 0,
+      roleMatch: best?.kategori ?? "-",
+      jobId: best?.id ?? null,
+      matchedSkills: ruleMatch?.matchedSkills ?? [],
+      gapSkills: ruleMatch?.missingSkills ?? [],
       applicationId: application?.id ?? null,
       applicationStatus: application?.status ?? null,
     },
     certificates: student.certificates,
-    cloAnalysis,
+    kompetensiGroups,
   };
 };
