@@ -7,7 +7,7 @@ import { getCompanyMembership } from "../../utils/context";
 import { HttpError } from "../../utils/httpError";
 import { COMPANY_STATUS, NOTIFICATION_TYPE } from "../../constants";
 import prisma from "../../config/prisma";
-import { supabase, SUPABASE_LOGO_BUCKET } from "../../config/supabase";
+import { supabase, SUPABASE_LOGO_BUCKET, SUPABASE_COMPANY_BUCKET } from "../../config/supabase";
 import { randomUUID } from "crypto";
 import { sendMail } from "../../config/mailer";
 import { VerifyCompanyInput, RejectCompanyInput } from "./company.validation";
@@ -112,30 +112,71 @@ export const verifyCompanyHandler = asyncHandler(async (req: Request, res: Respo
   return sendSuccess(res, company, "Perusahaan diverifikasi dan pemberitahuan telah dikirim");
 });
 
-// PATCH /companies/:id/reject (Superadmin) - akun dihapus permanen
+// PATCH /companies/:id/reject (Superadmin)
 export const rejectCompanyHandler = asyncHandler(async (req: Request, res: Response) => {
   const { reason } = req.body as RejectCompanyInput;
 
-  const { company, contacts } = await companyService.rejectAndDeleteCompany(
-    String(req.params.id),
-    reason,
-  );
+  const { company, contacts } = await companyService.rejectCompany(String(req.params.id), reason);
 
-  // Email WAJIB dikirim setelah data diambil, karena akunnya sudah dihapus.
+  const linkPerbaikan = `${process.env.FRONTEND_URL ?? "http://localhost:5173"}/company/ubah-profil-perusahaan`;
+
   for (const c of contacts) {
     await sendMail(
       c.email,
-      `Pendaftaran ${company.name} Ditolak`,
+      `Pendaftaran ${company.name} Perlu Diperbaiki`,
       mailShell(
-        "Pendaftaran Ditolak",
+        "Pendaftaran Belum Dapat Disetujui",
         `<p>Halo ${c.name ?? ""},</p>
-         <p>Pendaftaran perusahaan <b>${company.name}</b> tidak dapat kami setujui.</p>
-         <p><b>Alasan penolakan:</b><br>${reason}</p>
-         <p>Akun beserta dokumen yang diunggah telah dihapus dari sistem.
-            Anda dapat mendaftar ulang setelah memperbaiki hal-hal di atas.</p>`,
+         <p>Pendaftaran perusahaan <b>${company.name}</b> belum dapat kami setujui.</p>
+         <p><b>Alasan:</b><br>${reason}</p>
+         <p>Anda dapat memperbaiki data dan mengunggah ulang dokumen melalui tombol di bawah.
+            Setelah dokumen baru diunggah, pendaftaran otomatis diajukan kembali untuk ditinjau.</p>
+         <p style="margin:24px 0">
+           <a href="${linkPerbaikan}"
+              style="background:#0f5ce0;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none">
+              Perbaiki Data Perusahaan
+           </a>
+         </p>
+         <p>Atau salin tautan ini ke browser:<br><a href="${linkPerbaikan}">${linkPerbaikan}</a></p>`,
       ),
     );
   }
 
-  return sendSuccess(res, company, "Pendaftaran ditolak, akun dihapus, dan pemberitahuan telah dikirim");
+  return sendSuccess(res, company, "Pendaftaran ditolak dan pemberitahuan telah dikirim");
+});
+
+// PATCH /companies/me/documents (multipart: izinUsaha, suratResmi)
+export const updateCompanyDocsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const member = await getCompanyMembership(req.user!.id);
+
+  const files = req.files as { [field: string]: Express.Multer.File[] } | undefined;
+  const izinUsaha = files?.izinUsaha?.[0];
+  const suratResmi = files?.suratResmi?.[0];
+  if (!izinUsaha && !suratResmi) {
+    throw new HttpError(400, "Tidak ada dokumen yang diunggah");
+  }
+
+  const uploadDoc = async (file: Express.Multer.File, label: string) => {
+    const ext = file.originalname.split(".").pop()?.toLowerCase() ?? "bin";
+    const objectPath = `${label}/${Date.now()}-${randomUUID()}.${ext}`;
+    const { error } = await supabase.storage
+      .from(SUPABASE_COMPANY_BUCKET)
+      .upload(objectPath, file.buffer, { contentType: file.mimetype, upsert: false });
+    if (error) throw new HttpError(500, `Gagal mengunggah ${label}: ${error.message}`);
+    const { data } = supabase.storage.from(SUPABASE_COMPANY_BUCKET).getPublicUrl(objectPath);
+    return data.publicUrl;
+  };
+
+  const company = await companyService.updateCompanyDocuments(member.companyId, {
+    izinUsahaUrl: izinUsaha ? await uploadDoc(izinUsaha, "izin-usaha") : undefined,
+    suratResmiUrl: suratResmi ? await uploadDoc(suratResmi, "surat-resmi") : undefined,
+  });
+
+  return sendSuccess(
+    res,
+    company,
+    company.status === "pending"
+      ? "Dokumen diperbarui dan pendaftaran diajukan kembali untuk ditinjau"
+      : "Dokumen perusahaan diperbarui",
+  );
 });

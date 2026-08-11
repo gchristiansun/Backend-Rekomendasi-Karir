@@ -12,7 +12,6 @@ import { authorizeRole } from "../../middleware/authorizeRole";
 import { validateRequest } from "../../middleware/validateRequest";
 import { applySchema, updateStatusSchema } from "./application.validation";
 import { ROLES } from "../../constants";
-import { requireVerifiedCompany } from "../../middleware/requireVerifiedCompany";
 
 const router = Router();
 
@@ -31,7 +30,6 @@ router.get(
   "/company",
   authMiddleware,
   authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF),
-  requireVerifiedCompany,
   companyApplicationsHandler,
 );
 
@@ -39,7 +37,6 @@ router.get(
   "/job/:jobId",
   authMiddleware,
   authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF),
-  requireVerifiedCompany,
   jobApplicationsHandler,
 );
 
@@ -47,7 +44,6 @@ router.patch(
   "/:id/status",
   authMiddleware,
   authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF),
-  requireVerifiedCompany,
   updateStatusHandler,
 );
 

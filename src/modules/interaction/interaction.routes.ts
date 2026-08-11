@@ -17,7 +17,6 @@ import {
   viewDurationSchema,
 } from "./interaction.validation";
 import { ROLES } from "../../constants";
-import { requireVerifiedCompany } from "../../middleware/requireVerifiedCompany";
 
 const router = Router();
 const STUDENT = authorizeRole(ROLES.STUDENT);
@@ -35,11 +34,11 @@ router.patch("/views/:id/duration", authMiddleware, STUDENT, validateRequest(vie
 router.get("/signals/me", authMiddleware, STUDENT, mySignalsHandler);
 router.get("/signals/job/:jobId", authMiddleware, authorizeRole(ROLES.COMPANY_STAFF), jobSignalsHandler);
 
+
 router.get(
   "/signals/job/:jobId",
   authMiddleware,
   authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF),
-  requireVerifiedCompany,
   jobSignalsHandler,
 );
 export default router;

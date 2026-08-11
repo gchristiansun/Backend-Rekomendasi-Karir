@@ -9,7 +9,6 @@ import {
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { authorizeRole } from "../../middleware/authorizeRole";
 import { ROLES } from "../../constants";
-import { requireVerifiedCompany } from "../../middleware/requireVerifiedCompany";
 
 const router = Router();
 
@@ -28,7 +27,6 @@ router.get(
   "/candidates",
   authMiddleware,
   authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF),
-  requireVerifiedCompany,
   companyCandidatesHandler,
 );
 
@@ -36,7 +34,6 @@ router.get(
   "/candidates/detail/:studentId",
   authMiddleware,
   authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF),
-  requireVerifiedCompany,
   candidateDetailHandler,
 );
 
@@ -44,7 +41,6 @@ router.get(
   "/candidates/:jobId",
   authMiddleware,
   authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF),
-  requireVerifiedCompany,
   matchCandidatesHandler,
 );
 

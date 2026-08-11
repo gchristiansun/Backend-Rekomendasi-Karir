@@ -112,6 +112,8 @@ model Company {
   suratResmiUrl String?   // surat resmi perusahaan (opsional)
   status        String    @default("pending")
   verifiedAt    DateTime?
+  rejectionReason String?
+  rejectedAt      DateTime?
   created_at    DateTime  @default(now())
   updated_at    DateTime  @updatedAt
 

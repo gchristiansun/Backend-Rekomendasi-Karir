@@ -8,6 +8,7 @@ import {
   rejectCompanyHandler,
   uploadLogoHandler,
   companyReviewHandler,
+  updateCompanyDocsHandler,
 } from "./company.controller";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { authorizeRole } from "../../middleware/authorizeRole";
@@ -15,6 +16,7 @@ import { validateRequest } from "../../middleware/validateRequest";
 import { ROLES } from "../../constants";
 import { uploadLogo } from "../../config/upload";
 import { updateCompanySchema, verifyCompanySchema, rejectCompanySchema } from "./company.validation";
+import { uploadCompanyDocs } from "../../config/upload";
 
 const router = Router();
 
@@ -42,3 +44,15 @@ router.get("/:id", authMiddleware, authorizeRole(ROLES.ADMIN), getCompanyHandler
 
 
 export default router;
+
+// route /me/... harus di atas /:id
+router.patch(
+  "/me/documents",
+  authMiddleware,
+  authorizeRole(ROLES.COMPANY, ROLES.COMPANY_STAFF),
+  uploadCompanyDocs.fields([
+    { name: "izinUsaha", maxCount: 1 },
+    { name: "suratResmi", maxCount: 1 },
+  ]),
+  updateCompanyDocsHandler,
+);

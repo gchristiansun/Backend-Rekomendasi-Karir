@@ -117,58 +117,66 @@ export const verifyCompanyWithMessage = async (companyId: string, message?: stri
 
   const updated = await prisma.company.update({
     where: { id: companyId },
-    data: { status: COMPANY_STATUS.VERIFIED, verifiedAt: new Date() },
+    // jejak penolakan sebelumnya dibersihkan agar tidak tertinggal di profil
+    data: {
+      status: COMPANY_STATUS.VERIFIED,
+      verifiedAt: new Date(),
+      rejectionReason: null,
+      rejectedAt: null,
+    } as any,
   });
 
   return { company: updated, contacts: collectMemberContacts(company) };
 };
 
-// ============================================================
-// PENOLAKAN (akun dihapus permanen)
-// ============================================================
-
-// URL publik Supabase -> path objek, agar berkasnya bisa dihapus.
-const objectPathFromPublicUrl = (url?: string | null): string | null => {
-  if (!url) return null;
-  const marker = `/object/public/${SUPABASE_COMPANY_BUCKET}/`;
-  const i = url.indexOf(marker);
-  return i === -1 ? null : decodeURIComponent(url.slice(i + marker.length));
-};
-
-export const rejectAndDeleteCompany = async (companyId: string, reason: string) => {
+// Penolakan tidak menghapus akun: perusahaan tetap dapat masuk, memperbaiki
+// dokumen di halaman profil, lalu mengajukan verifikasi ulang.
+export const rejectCompany = async (companyId: string, reason: string) => {
   const company = await getCompanyForReview(companyId);
   if (!company) throw new HttpError(404, "Perusahaan tidak ditemukan");
-
-  // Pengaman: perusahaan terverifikasi tidak boleh dihapus lewat jalur ini,
-  // karena sudah punya lowongan, pelamar, dan undangan yang ikut terhapus.
-  if (company.status !== COMPANY_STATUS.PENDING) {
+  if (company.status === COMPANY_STATUS.VERIFIED) {
     throw new HttpError(
       400,
-      "Hanya perusahaan berstatus pending yang dapat ditolak. Gunakan penonaktifan akun untuk perusahaan terverifikasi.",
+      "Perusahaan yang sudah terverifikasi tidak dapat ditolak. Gunakan penonaktifan akun bila diperlukan.",
     );
   }
 
-  const contacts = collectMemberContacts(company);
-  const userIds = (company.members ?? []).map((m: any) => m.userId);
-  const snapshot = { id: company.id, name: company.name, nib: company.nib };
-
-  // Hapus dokumen di Supabase (best-effort; kegagalan tidak membatalkan penolakan).
-  const paths = [
-    objectPathFromPublicUrl((company as any).izinUsahaUrl),
-    objectPathFromPublicUrl((company as any).suratResmiUrl),
-  ].filter(Boolean) as string[];
-  if (paths.length > 0) {
-    const { error } = await supabase.storage.from(SUPABASE_COMPANY_BUCKET).remove(paths);
-    if (error) console.warn("[reject] gagal hapus dokumen Supabase:", error.message);
-  }
-
-  // Hapus perusahaan (cascade: CompanyMember, Job, dst) lalu akun penggunanya.
-  await prisma.$transaction(async (tx: any) => {
-    await tx.company.delete({ where: { id: companyId } });
-    if (userIds.length > 0) {
-      await tx.user.deleteMany({ where: { id: { in: userIds } } });
-    }
+  const updated = await prisma.company.update({
+    where: { id: companyId },
+    data: {
+      status: COMPANY_STATUS.REJECTED,
+      rejectionReason: reason,
+      rejectedAt: new Date(),
+    } as any,
   });
 
-  return { company: snapshot, contacts };
+  return { company: updated, contacts: collectMemberContacts(company) };
 };
+
+// Perbarui dokumen legal dan ajukan verifikasi ulang.
+// Dokumen terkunci setelah perusahaan terverifikasi, sama seperti NIB.
+export const updateCompanyDocuments = async (
+  companyId: string,
+  urls: { izinUsahaUrl?: string; suratResmiUrl?: string },
+) => {
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  if (!company) throw new HttpError(404, "Perusahaan tidak ditemukan");
+  if (company.status === COMPANY_STATUS.VERIFIED) {
+    throw new HttpError(400, "Dokumen tidak dapat diubah karena perusahaan sudah terverifikasi.");
+  }
+
+  const data: any = {};
+  if (urls.izinUsahaUrl) data.izinUsahaUrl = urls.izinUsahaUrl;
+  if (urls.suratResmiUrl) data.suratResmiUrl = urls.suratResmiUrl;
+
+  // Mengunggah dokumen baru setelah ditolak dianggap sebagai pengajuan ulang.
+  if (company.status === COMPANY_STATUS.REJECTED) {
+    data.status = COMPANY_STATUS.PENDING;
+    data.rejectionReason = null;
+    data.rejectedAt = null;
+  }
+
+  return prisma.company.update({ where: { id: companyId }, data });
+};
+
+
