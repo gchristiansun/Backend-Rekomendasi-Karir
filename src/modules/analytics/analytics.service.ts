@@ -613,20 +613,22 @@ export const getMasterIndustries = async (opts: {
   ]);
 
   const industries = jobs.map((j: any) => {
-    const skillSet = new Set<string>();
-    for (const r of j.requirements) {
-      for (const s of String(r.skills ?? "").split(",")) {
-        const t = s.trim();
-        if (t) skillSet.add(t);
-      }
-    }
+    // Tiap tanggung jawab dibawa lengkap dengan keahliannya sendiri, supaya
+    // halaman master data bisa menampilkan dan mengekspornya per tanggung jawab.
+    const responsibilities = (j.requirements ?? []).map((r: any) => ({
+      requirement: r.requirement,
+      skills: String(r.skills ?? "")
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean),
+    }));
+
     return {
       id: j.id,
       companyName: j.company?.name ?? "-",
       industry: j.company?.industry ?? null,
       position: j.title,
-      responsibility: j.requirements[0]?.requirement ?? null,
-      skills: Array.from(skillSet).slice(0, 8),
+      responsibilities,
       updatedAt: j.updated_at,
     };
   });
