@@ -43,6 +43,65 @@ tags:
       200:
         description: Profil kompetensi berhasil diambil
 
+/api/students/me/academic:
+  get:
+    summary: Transkrip akademik mahasiswa dikelompokkan per mata kuliah
+    description: >
+      Tiap mata kuliah memuat daftar CLO beserta nilai dan keahlian yang
+      divalidasinya. Bila sebuah CLO belum memiliki daftar keahlian sendiri,
+      dipakai keahlian tingkat mata kuliah sebagai cadangan. Dipakai halaman
+      Profile Mahasiswa.
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Transkrip akademik beserta ringkasan IPK, SKS, dan jumlah CLO
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  properties:
+                    student: { type: object }
+                    stats:
+                      type: object
+                      properties:
+                        gpa: { type: number, nullable: true }
+                        totalSks: { type: integer }
+                        totalClo: { type: integer }
+                        totalCourses: { type: integer }
+                    courses:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          code: { type: string, nullable: true }
+                          name: { type: string }
+                          sks: { type: integer, nullable: true }
+                          semester: { type: integer, nullable: true }
+                          grade: { type: string, nullable: true }
+                          score: { type: number, nullable: true }
+                          clos:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id: { type: string }
+                                code: { type: string }
+                                description: { type: string }
+                                score: { type: number, nullable: true }
+                                skills:
+                                  type: array
+                                  items: { type: string }
+      403:
+        description: Hanya mahasiswa
+      404:
+        description: Data akademik tidak ditemukan
+
 /api/students/me/skills:
   get:
     summary: Daftar skill mahasiswa
@@ -105,6 +164,19 @@ tags:
       200:
         description: Daftar mahasiswa
 
+/api/students/faculty-major-map:
+  get:
+    summary: Peta fakultas dan program studi yang terdata
+    description: Dipakai untuk mengisi pilihan dropdown pada form manajemen mahasiswa.
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Peta fakultas beserta daftar program studinya
+      403:
+        description: Hanya Admin Kampus, Kaprodi, atau Super Admin
+
 /api/students/{id}:
   get:
     summary: Detail mahasiswa by id
@@ -119,5 +191,84 @@ tags:
     responses:
       200:
         description: Detail mahasiswa
+      404:
+        description: Mahasiswa tidak ditemukan
+
+  patch:
+    summary: Perbarui data mahasiswa oleh Admin Kampus
+    description: Menyentuh tabel mahasiswa sekaligus akun penggunanya (nama, email, dan status).
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name: { type: string, minLength: 3 }
+              email: { type: string, format: email }
+              nim: { type: string, minLength: 3 }
+              major: { type: string, minLength: 2 }
+              faculty: { type: string, minLength: 2 }
+              entryYear: { type: integer, example: 2023 }
+              gpa: { type: number, minimum: 0, maximum: 4, example: 3.5 }
+              status:
+                type: string
+                enum: [Active, Inactive, Graduated]
+    responses:
+      200:
+        description: Data mahasiswa diperbarui
+      400:
+        description: Data tidak valid
+      403:
+        description: Hanya Admin Kampus atau Super Admin
+      404:
+        description: Mahasiswa tidak ditemukan
+      409:
+        description: Email sudah digunakan akun lain
+
+  delete:
+    summary: Nonaktifkan akun mahasiswa
+    description: Akun ditandai terhapus (soft delete) sehingga tidak lagi muncul di daftar mahasiswa.
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Mahasiswa dinonaktifkan
+      403:
+        description: Hanya Admin Kampus atau Super Admin
+      404:
+        description: Mahasiswa tidak ditemukan
+
+/api/students/{id}/detail:
+  get:
+    summary: Detail akademik mahasiswa untuk halaman kampus
+    description: Profil, ringkasan SKS dan CLO, nilai per CLO, serta daftar sertifikat.
+    tags: [STUDENT]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Detail akademik mahasiswa
+      403:
+        description: Hanya Admin Kampus, Kaprodi, atau Super Admin
       404:
         description: Mahasiswa tidak ditemukan

@@ -1,0 +1,150 @@
+tags:
+  - name: UNIVERSITY
+    description: Kelola universitas beserta akun Admin Kampusnya (khusus Super Admin)
+
+/api/universities:
+  get:
+    summary: Daftar universitas
+    description: Mengembalikan daftar universitas beserta ringkasan admin dan jumlah mahasiswanya.
+    tags: [UNIVERSITY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: page
+        in: query
+        schema: { type: integer, default: 1 }
+      - name: limit
+        in: query
+        schema: { type: integer, default: 10 }
+      - name: search
+        in: query
+        description: Cari berdasarkan nama universitas
+        schema: { type: string }
+    responses:
+      200:
+        description: Daftar universitas
+      401:
+        description: Token tidak valid
+      403:
+        description: Hanya Super Admin
+
+  post:
+    summary: Daftarkan universitas baru sekaligus akun Admin Kampus
+    description: >
+      Membuat universitas dan satu akun Admin Kampus dalam sekali proses.
+      Kode universitas akan digenerate dari nama bila tidak diisi.
+    tags: [UNIVERSITY]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, city, address, website, admin]
+            properties:
+              name: { type: string, minLength: 3, example: Institut Teknologi Sumatera }
+              city: { type: string, minLength: 2, example: Lampung Selatan }
+              address: { type: string, minLength: 5, example: Jl. Terusan Ryacudu, Way Hui }
+              website: { type: string, minLength: 3, example: https://itera.ac.id }
+              code:
+                type: string
+                minLength: 2
+                description: Opsional, digenerate dari nama bila kosong
+                example: ITERA
+              admin:
+                type: object
+                required: [name, email, password]
+                properties:
+                  name: { type: string, minLength: 3, example: Budi Santoso }
+                  email: { type: string, format: email, example: admin@itera.ac.id }
+                  password: { type: string, minLength: 8, example: rahasia123 }
+                  phone: { type: string, example: "081234567890" }
+                  nip: { type: string, example: "198501012010011001" }
+    responses:
+      201:
+        description: Universitas dan akun Admin Kampus dibuat
+      400:
+        description: Data tidak valid
+      403:
+        description: Hanya Super Admin
+      409:
+        description: Nama universitas atau email admin sudah dipakai
+
+/api/universities/{id}:
+  get:
+    summary: Detail satu universitas
+    tags: [UNIVERSITY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Detail universitas
+      403:
+        description: Hanya Super Admin
+      404:
+        description: Universitas tidak ditemukan
+
+  patch:
+    summary: Perbarui data universitas atau admin utamanya
+    description: Seluruh field bersifat opsional; hanya yang dikirim yang diperbarui.
+    tags: [UNIVERSITY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name: { type: string, minLength: 3 }
+              city: { type: string, minLength: 2 }
+              address: { type: string, minLength: 5 }
+              website: { type: string, minLength: 3 }
+              adminName:
+                type: string
+                minLength: 3
+                description: Mengubah nama akun Admin Kampus utama
+              adminStatus:
+                type: string
+                enum: [active, pending, suspended]
+                description: Mengubah status akun Admin Kampus utama
+    responses:
+      200:
+        description: Universitas diperbarui
+      400:
+        description: Data tidak valid
+      403:
+        description: Hanya Super Admin
+      404:
+        description: Universitas tidak ditemukan
+
+  delete:
+    summary: Hapus universitas
+    tags: [UNIVERSITY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Universitas dihapus
+      403:
+        description: Hanya Super Admin
+      404:
+        description: Universitas tidak ditemukan

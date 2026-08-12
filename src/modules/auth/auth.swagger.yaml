@@ -104,6 +104,37 @@ tags:
       200:
         description: Data user (termasuk recoveryEmail & recoveryEmailVerifiedAt)
 
+  patch:
+    summary: Perbarui data akun sendiri
+    description: >
+      Seluruh field opsional. Password wajib disertakan hanya bila email diubah,
+      sebagai konfirmasi pemilik akun.
+    tags: [AUTH]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name: { type: string, minLength: 3, example: Budi Santoso }
+              phone: { type: string, minLength: 6, maxLength: 30, example: "081234567890" }
+              email: { type: string, format: email, example: budi@contoh.com }
+              password:
+                type: string
+                description: Wajib diisi bila mengubah email
+    responses:
+      200:
+        description: Akun diperbarui
+      400:
+        description: Data tidak valid, atau password tidak disertakan saat mengubah email
+      401:
+        description: Password salah
+      409:
+        description: Email sudah digunakan akun lain
+
 /api/auth/password:
   patch:
     summary: Ubah kata sandi (sedang login)

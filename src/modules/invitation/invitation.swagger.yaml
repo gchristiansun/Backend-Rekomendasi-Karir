@@ -1,0 +1,134 @@
+tags:
+  - name: INVITATION
+    description: Undangan rekrutmen dari perusahaan kepada mahasiswa
+
+/api/invitations:
+  post:
+    summary: Undang mahasiswa ke sebuah lowongan
+    description: >
+      Hanya untuk Direktur/HRD perusahaan pemilik lowongan. Lowongan harus
+      berstatus aktif dan akun mahasiswa harus aktif. Mahasiswa yang sudah
+      melamar lowongan tersebut tidak dapat diundang lagi. Undangan yang pernah
+      ditolak atau dibatalkan boleh dikirim ulang.
+    tags: [INVITATION]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [jobId, studentId]
+            properties:
+              jobId: { type: string, example: 01KWG3VK4S8DX40EZ6RZAAQDSE }
+              studentId: { type: string, example: 01KWG3VK9CM67VVG62E00VJQJZ }
+              message:
+                type: string
+                maxLength: 500
+                description: Pesan pengantar dari perekrut
+                example: Profil Anda cocok dengan kebutuhan tim kami.
+    responses:
+      201:
+        description: Undangan terkirim
+      400:
+        description: Data tidak valid, lowongan tidak aktif, atau akun mahasiswa tidak aktif
+      403:
+        description: Lowongan bukan milik perusahaan Anda
+      404:
+        description: Lowongan atau mahasiswa tidak ditemukan
+      409:
+        description: Mahasiswa sudah melamar, atau sudah diundang dan menunggu jawaban
+
+/api/invitations/company:
+  get:
+    summary: Daftar undangan yang dikirim perusahaan
+    description: Berisi undangan seluruh lowongan perusahaan beserta ringkasan jumlah per status.
+    tags: [INVITATION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: jobId
+        in: query
+        description: Saring berdasarkan satu lowongan
+        schema: { type: string }
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [pending, accepted, declined, cancelled]
+    responses:
+      200:
+        description: Daftar undangan perusahaan
+      403:
+        description: Hanya Direktur atau HRD perusahaan
+
+/api/invitations/me:
+  get:
+    summary: Daftar undangan yang diterima mahasiswa
+    description: Tiap undangan dilengkapi match score mahasiswa terhadap lowongan tersebut.
+    tags: [INVITATION]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Daftar undangan mahasiswa
+      403:
+        description: Hanya mahasiswa
+
+/api/invitations/{id}/cancel:
+  patch:
+    summary: Batalkan undangan yang sudah dikirim
+    tags: [INVITATION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Undangan dibatalkan
+      400:
+        description: Undangan sudah dijawab sehingga tidak dapat dibatalkan
+      403:
+        description: Hanya Direktur atau HRD perusahaan pengirim
+      404:
+        description: Undangan tidak ditemukan
+
+/api/invitations/{id}/respond:
+  patch:
+    summary: Terima atau tolak undangan
+    description: >
+      Menerima undangan otomatis membuat lamaran pada lowongan tersebut,
+      sehingga mahasiswa tidak perlu melamar ulang.
+    tags: [INVITATION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [action]
+            properties:
+              action:
+                type: string
+                enum: [accept, decline]
+                example: accept
+    responses:
+      200:
+        description: Undangan dijawab
+      400:
+        description: Aksi tidak valid atau undangan sudah dijawab sebelumnya
+      403:
+        description: Hanya mahasiswa penerima undangan
+      404:
+        description: Undangan tidak ditemukan

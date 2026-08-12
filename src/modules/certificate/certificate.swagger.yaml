@@ -14,15 +14,60 @@ tags:
         multipart/form-data:
           schema:
             type: object
-            required: [title, file]
+            required: [title]
             properties:
               title: { type: string, example: "Sertifikat AWS" }
               issuer: { type: string, example: "Amazon" }
-              skills: { type: string, example: "AWS,Cloud Computing" }
+              issuedAt:
+                type: string
+                format: date
+                description: Tanggal terbit sertifikat
+                example: "2026-06-01"
+              credentialId:
+                type: string
+                description: ID kredensial atau tautan verifikasi dari penerbit
+                example: https://verify.aws/ABC123
+              skills:
+                type: string
+                description: Daftar keahlian dipisah koma
+                example: "AWS,Cloud Computing"
               file: { type: string, format: binary }
     responses:
       201:
         description: Sertifikat diunggah, menunggu verifikasi
+      400:
+        description: Judul sertifikat wajib diisi
+      403:
+        description: Hanya mahasiswa
+      500:
+        description: Gagal mengunggah berkas ke penyimpanan
+
+  get:
+    summary: Daftar seluruh sertifikat (Admin Kampus, Kaprodi, Super Admin)
+    tags: [CERTIFICATE]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [pending, approved, rejected]
+      - name: search
+        in: query
+        description: Cari berdasarkan judul sertifikat atau nama mahasiswa
+        schema: { type: string }
+      - name: page
+        in: query
+        schema: { type: integer, default: 1 }
+      - name: limit
+        in: query
+        schema: { type: integer, default: 10 }
+    responses:
+      200:
+        description: Daftar sertifikat
+      403:
+        description: Tidak punya akses
 
 /api/certificates/me:
   get:
@@ -80,3 +125,76 @@ tags:
     responses:
       200:
         description: Sertifikat ditolak
+
+/api/certificates/{id}:
+  get:
+    summary: Detail satu sertifikat (Admin Kampus, Kaprodi, Super Admin)
+    tags: [CERTIFICATE]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Detail sertifikat beserta pemilik dan keahliannya
+      403:
+        description: Tidak punya akses
+      404:
+        description: Sertifikat tidak ditemukan
+
+/api/certificates/{id}/skills:
+  patch:
+    summary: Sunting daftar keahlian pada sebuah sertifikat
+    description: >
+      Dipakai verifikator untuk merapikan keahlian sebelum sertifikat disetujui.
+      Daftar yang dikirim menggantikan seluruh keahlian sertifikat tersebut.
+    tags: [CERTIFICATE]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [skills]
+            properties:
+              skills:
+                type: array
+                items: { type: string }
+                example: ["AWS", "Cloud Computing"]
+    responses:
+      200:
+        description: Keahlian sertifikat diperbarui
+      403:
+        description: Tidak punya akses
+      404:
+        description: Sertifikat tidak ditemukan
+
+/api/certificates/{id}/pending:
+  patch:
+    summary: Kembalikan sertifikat ke status menunggu verifikasi
+    description: Dipakai bila keputusan sebelumnya perlu ditinjau ulang.
+    tags: [CERTIFICATE]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Sertifikat dikembalikan ke status pending
+      403:
+        description: Tidak punya akses
+      404:
+        description: Sertifikat tidak ditemukan

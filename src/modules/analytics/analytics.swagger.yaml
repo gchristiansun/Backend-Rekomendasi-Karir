@@ -35,3 +35,199 @@ tags:
     responses:
       200:
         description: Jumlah lamaran per status
+
+/api/analytics/university/dashboard:
+  get:
+    summary: Ringkasan dashboard universitas (Admin Kampus & Kaprodi)
+    description: Statistik mahasiswa, mata kuliah, CLO, dan sertifikat pada universitas pengguna yang login.
+    tags: [ANALYTICS]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Ringkasan dashboard universitas
+      403:
+        description: Akun tidak terhubung dengan universitas mana pun
+
+/api/analytics/activity-trends:
+  get:
+    summary: Tren aktivitas harian (Super Admin)
+    description: >
+      Jumlah peninjauan lowongan dan lamaran masuk per hari, dihitung dari tabel
+      JobView dan Application. Hari tanpa aktivitas tetap dikembalikan dengan
+      nilai nol supaya grafik tidak terputus. Pengelompokan memakai tanggal
+      waktu lokal server. Setiap kejadian dihitung, sehingga satu mahasiswa yang
+      melihat atau melamar beberapa kali dalam sehari terhitung semuanya.
+    tags: [ANALYTICS]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: days
+        in: query
+        description: Rentang hari ke belakang termasuk hari ini. Di luar 1-90 akan dinormalkan.
+        schema: { type: integer, default: 30, minimum: 1, maximum: 90 }
+    responses:
+      200:
+        description: Deret tanggal beserta jumlah jobViews dan applications
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success: { type: boolean }
+                message: { type: string }
+                data:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      date: { type: string, example: "2026-08-12" }
+                      jobViews: { type: integer, example: 4 }
+                      applications: { type: integer, example: 3 }
+      403:
+        description: Hanya Super Admin
+
+/api/analytics/activity-logs:
+  get:
+    summary: Log aktivitas pengguna per kelompok (Super Admin)
+    description: >
+      Log diturunkan dari tabel kejadian yang sudah ada. Untuk kelompok student,
+      aktivitas View Job menyertakan durasi kunjungan halaman detail lowongan
+      dalam milidetik pada field durationMs.
+    tags: [ANALYTICS]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: group
+        in: query
+        description: Kelompok pengguna yang ditampilkan
+        schema:
+          type: string
+          enum: [student, university, company]
+          default: student
+      - name: activity
+        in: query
+        description: Saring berdasarkan jenis aktivitas, mis. View Job, Apply Job, Save Job
+        schema: { type: string }
+      - name: search
+        in: query
+        description: Cari berdasarkan nama pengguna atau institusi
+        schema: { type: string }
+      - name: page
+        in: query
+        schema: { type: integer, default: 1 }
+      - name: limit
+        in: query
+        schema: { type: integer, default: 20 }
+    responses:
+      200:
+        description: Daftar log aktivitas beserta meta pagination
+      400:
+        description: Nilai group tidak dikenal
+      403:
+        description: Hanya Super Admin
+
+/api/analytics/recent-logs:
+  get:
+    summary: Log sistem terbaru lintas kelompok (Super Admin)
+    tags: [ANALYTICS]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: limit
+        in: query
+        description: Jumlah baris terbaru. Di luar 1-50 akan dinormalkan.
+        schema: { type: integer, default: 5, minimum: 1, maximum: 50 }
+    responses:
+      200:
+        description: Log sistem terbaru
+      403:
+        description: Hanya Super Admin
+
+/api/analytics/master/courses:
+  get:
+    summary: Master data mata kuliah beserta CLO (Super Admin)
+    description: >
+      Rincian tiap CLO memakai parafrase bila tersedia; teks asli RPS hanya
+      dipakai sebagai cadangan. Keahlian CLO dikembalikan sebagai array.
+    tags: [ANALYTICS]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: search
+        in: query
+        description: Cari berdasarkan nama mata kuliah atau nama universitas
+        schema: { type: string }
+      - name: page
+        in: query
+        schema: { type: integer, default: 1 }
+      - name: limit
+        in: query
+        schema: { type: integer, default: 20 }
+    responses:
+      200:
+        description: Daftar mata kuliah beserta CLO dan keahliannya
+      403:
+        description: Hanya Super Admin
+
+/api/analytics/master/industries:
+  get:
+    summary: Master data kebutuhan industri (Super Admin)
+    description: >
+      Tiap lowongan dikembalikan bersama seluruh tanggung jawabnya, dan tiap
+      tanggung jawab membawa daftar keahliannya sendiri.
+    tags: [ANALYTICS]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: search
+        in: query
+        description: Cari berdasarkan judul lowongan atau nama perusahaan
+        schema: { type: string }
+      - name: page
+        in: query
+        schema: { type: integer, default: 1 }
+      - name: limit
+        in: query
+        schema: { type: integer, default: 20 }
+    responses:
+      200:
+        description: Daftar kebutuhan industri per lowongan
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      companyName: { type: string }
+                      industry: { type: string, nullable: true }
+                      position: { type: string }
+                      responsibilities:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            requirement: { type: string }
+                            skills:
+                              type: array
+                              items: { type: string }
+                      updatedAt: { type: string, format: date-time }
+      403:
+        description: Hanya Super Admin
+
+/api/analytics/master/stats:
+  get:
+    summary: Ringkasan jumlah master data (Super Admin)
+    tags: [ANALYTICS]
+    security:
+      - bearerAuth: []
+    responses:
+      200:
+        description: Ringkasan jumlah mata kuliah, CLO, lowongan, dan keahlian
+      403:
+        description: Hanya Super Admin

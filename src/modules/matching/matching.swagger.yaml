@@ -19,6 +19,12 @@ tags:
 /api/matching/jobs/{jobId}:
   get:
     summary: Detail kecocokan & skill gap satu lowongan
+    description: >
+      requirementAnalysis memuat analisis per tanggung jawab. Tiap tanggung
+      jawab diwakili CLO dengan kontribusi tertinggi, di mana kontribusi adalah
+      kemiripan semantik dikali bobot nilai CLO tersebut. Skor kompetensi
+      lowongan adalah rata-rata match seluruh tanggung jawab. Bentuk datanya
+      sama dengan yang dilihat HRD pada detail kandidat.
     tags: [MATCHING]
     security:
       - bearerAuth: []
@@ -29,9 +35,98 @@ tags:
         schema: { type: string }
     responses:
       200:
-        description: matchScore, matchedSkills, gapSkills
+        description: matchScore, requirementAnalysis, matchedSkills, gapSkills
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  properties:
+                    job: { type: object }
+                    matchScore: { type: integer, example: 68 }
+                    matchMethod:
+                      type: string
+                      enum: [semantic, skill]
+                      description: semantic bila embedding tersedia di kedua sisi, selain itu berbasis keahlian
+                    requirementAnalysis:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          deskripsi: { type: string }
+                          matchScore: { type: integer, example: 81 }
+                          cloItems:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                kode: { type: string, example: CLO 3 }
+                                deskripsi: { type: string }
+                                matkul: { type: string }
+                                nilai: { type: string, example: "100" }
+                                skorKemiripan: { type: integer, example: 81 }
+                                bobotNilai: { type: number, example: 1 }
+                                kontribusi: { type: integer, example: 81 }
+      403:
+        description: Hanya mahasiswa
       404:
         description: Lowongan tidak ditemukan
+
+/api/matching/candidates:
+  get:
+    summary: Talent pool lintas lowongan perusahaan (Direktur/HRD)
+    description: >
+      Mengembalikan seluruh mahasiswa aktif beserta lowongan yang paling cocok
+      untuk masing-masing, termasuk mahasiswa yang lamarannya sudah diterima
+      atau ditolak. Field applicationStatus dan invitationStatus dipakai untuk
+      memilah tab pada halaman rekomendasi kandidat.
+    tags: [MATCHING]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: jobId
+        in: query
+        description: Batasi penilaian hanya pada satu lowongan
+        schema: { type: string }
+      - name: limit
+        in: query
+        schema: { type: integer, default: 100 }
+    responses:
+      200:
+        description: Daftar kandidat beserta daftar lowongan perusahaan
+      403:
+        description: Hanya Direktur atau HRD perusahaan
+
+/api/matching/candidates/detail/{studentId}:
+  get:
+    summary: Detail kandidat beserta analisis kompetensi per lowongan (Direktur/HRD)
+    description: >
+      Susunannya lowongan, lalu tanggung jawab, lalu CLO yang menutupinya.
+      Kontribusi CLO adalah kemiripan semantik dikali bobot nilai CLO, skor
+      tanggung jawab diambil dari kontribusi tertinggi, dan skor lowongan adalah
+      rata-rata seluruh tanggung jawabnya.
+    tags: [MATCHING]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: studentId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: jobId
+        in: query
+        description: Batasi analisis pada satu lowongan saja
+        schema: { type: string }
+    responses:
+      200:
+        description: Profil kandidat, sertifikat, dan kompetensiGroups
+      403:
+        description: Hanya Direktur atau HRD perusahaan
+      404:
+        description: Mahasiswa tidak ditemukan
 
 /api/matching/candidates/{jobId}:
   get:

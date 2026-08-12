@@ -30,6 +30,59 @@ tags:
       200:
         description: Profil perusahaan diperbarui
 
+/api/companies/me/logo:
+  patch:
+    summary: Unggah logo perusahaan
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [logo]
+            properties:
+              logo: { type: string, format: binary }
+    responses:
+      200:
+        description: Logo diperbarui, mengembalikan URL publiknya
+      403:
+        description: Hanya Direktur atau HRD perusahaan
+      500:
+        description: Gagal mengunggah berkas ke penyimpanan
+
+/api/companies/me/documents:
+  patch:
+    summary: Unggah ulang dokumen legal perusahaan
+    description: >
+      Bila status perusahaan sedang ditolak, pengajuan otomatis dikembalikan ke
+      status menunggu verifikasi setelah dokumen baru diunggah.
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              izinUsaha:
+                type: string
+                format: binary
+                description: Dokumen izin usaha (PDF)
+              suratResmi:
+                type: string
+                format: binary
+                description: Surat resmi perusahaan, opsional
+    responses:
+      200:
+        description: Dokumen diperbarui
+      403:
+        description: Hanya Direktur atau HRD perusahaan
+
 /api/companies:
   get:
     summary: Daftar perusahaan (Admin Utama)
@@ -74,6 +127,95 @@ tags:
       200:
         description: Perusahaan ditolak
 
+/api/companies/{id}/reevaluate:
+  patch:
+    summary: Kembalikan perusahaan ke proses verifikasi ulang (Admin Utama)
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Perusahaan dikembalikan ke status menunggu verifikasi
+      403:
+        description: Hanya Super Admin
+      404:
+        description: Perusahaan tidak ditemukan
+
+/api/companies/{id}/review:
+  get:
+    summary: Data lengkap perusahaan untuk halaman verifikasi (Admin Utama)
+    description: Termasuk dokumen legal dan data pendaftar, dipakai saat menyetujui atau menolak.
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Detail perusahaan untuk verifikasi
+      403:
+        description: Hanya Super Admin
+      404:
+        description: Perusahaan tidak ditemukan
+
+/api/companies/{id}/public:
+  get:
+    summary: Profil publik perusahaan
+    description: >
+      Berisi field aman perusahaan beserta daftar lowongan aktifnya. Dapat
+      diakses semua pengguna yang login, dipakai halaman detail perusahaan
+      pada sisi mahasiswa.
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Profil publik perusahaan beserta lowongan aktif
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    industry: { type: string, nullable: true }
+                    description: { type: string, nullable: true }
+                    website: { type: string, nullable: true }
+                    logoUrl: { type: string, nullable: true }
+                    size: { type: string, nullable: true }
+                    address: { type: string, nullable: true }
+                    status: { type: string }
+                    jobs:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          title: { type: string }
+                          department: { type: string, nullable: true }
+                          location: { type: string, nullable: true }
+                          type: { type: string, nullable: true }
+      401:
+        description: Token tidak valid
+      404:
+        description: Perusahaan tidak ditemukan
+
 /api/companies/{id}:
   get:
     summary: Detail perusahaan (Admin Utama)
@@ -88,5 +230,38 @@ tags:
     responses:
       200:
         description: Detail perusahaan
+      404:
+        description: Perusahaan tidak ditemukan
+
+  patch:
+    summary: Perbarui data perusahaan oleh Admin Utama
+    tags: [COMPANY]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name: { type: string }
+              industry: { type: string }
+              description: { type: string }
+              website: { type: string, example: "https://techcorp.com" }
+              size: { type: string, example: "51-200 Karyawan" }
+              address: { type: string }
+    responses:
+      200:
+        description: Perusahaan diperbarui
+      400:
+        description: Data tidak valid
+      403:
+        description: Hanya Super Admin
       404:
         description: Perusahaan tidak ditemukan

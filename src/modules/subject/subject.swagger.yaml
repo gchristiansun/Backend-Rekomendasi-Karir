@@ -71,6 +71,63 @@ tags:
       404:
         description: Mata kuliah tidak ditemukan
 
+  patch:
+    summary: Perbarui mata kuliah
+    description: Seluruh field opsional. Mengirim skills akan mengganti daftar keahlian mata kuliah.
+    tags:
+      - SUBJECT
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code: { type: string, example: "IF2101" }
+              name: { type: string, minLength: 2, example: Pemrograman Dasar }
+              sks: { type: integer, minimum: 1, maximum: 10, example: 3 }
+              semester: { type: integer, minimum: 1, maximum: 14, example: 1 }
+              rps: { type: string }
+              skills:
+                type: array
+                items: { type: string }
+                example: ["Python", "Problem Solving"]
+    responses:
+      200:
+        description: Mata kuliah diperbarui
+      400:
+        description: Data tidak valid
+      403:
+        description: Hanya Admin Kampus atau Super Admin
+      404:
+        description: Mata kuliah tidak ditemukan
+
+  delete:
+    summary: Hapus mata kuliah
+    tags:
+      - SUBJECT
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Mata kuliah dihapus
+      403:
+        description: Hanya Admin Kampus atau Super Admin
+      404:
+        description: Mata kuliah tidak ditemukan
+
 /api/subjects/{id}/clos:
   get:
     summary: Daftar CLO (capaian pembelajaran) mata kuliah
@@ -87,3 +144,102 @@ tags:
     responses:
       200:
         description: Daftar CLO berhasil diambil
+
+  post:
+    summary: Tambah CLO pada mata kuliah
+    description: >
+      Teks CLO langsung di-embed agar dapat dipakai pencocokan semantik, dan
+      keahlian CLO ikut ditambahkan ke keahlian mata kuliah.
+    tags:
+      - SUBJECT
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code, description]
+            properties:
+              code: { type: string, example: CLO 1 }
+              description:
+                type: string
+                description: Rumusan capaian pembelajaran, dipakai sebagai sumber embedding
+                example: Mampu merancang algoritma dan menerapkannya pada masalah sederhana.
+              skills:
+                type: array
+                items: { type: string }
+                example: ["Problem Solving", "C++"]
+    responses:
+      201:
+        description: CLO dibuat
+      403:
+        description: Hanya Admin Kampus atau Super Admin
+      404:
+        description: Mata kuliah tidak ditemukan
+
+/api/subjects/clos/{cloId}:
+  patch:
+    summary: Perbarui CLO
+    description: >
+      Mengubah description akan membuat ulang embedding, karena vektor lama
+      tidak lagi mewakili isinya dan akan membuat skor semantik menyesatkan.
+    tags:
+      - SUBJECT
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: cloId
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code: { type: string, example: CLO 2 }
+              description: { type: string }
+              skills:
+                type: array
+                items: { type: string }
+    responses:
+      200:
+        description: CLO diperbarui
+      403:
+        description: Hanya Admin Kampus atau Super Admin
+      404:
+        description: CLO tidak ditemukan
+
+  delete:
+    summary: Hapus CLO
+    tags:
+      - SUBJECT
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: cloId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: force
+        in: query
+        description: Wajib true bila CLO sudah memiliki nilai mahasiswa
+        schema: { type: boolean }
+    responses:
+      200:
+        description: CLO dihapus
+      400:
+        description: CLO masih memiliki nilai mahasiswa, ulangi dengan force=true
+      403:
+        description: Hanya Admin Kampus atau Super Admin
+      404:
+        description: CLO tidak ditemukan

@@ -34,6 +34,33 @@ tags:
       200:
         description: Daftar lamaran + statusLabel
 
+/api/applications/company:
+  get:
+    summary: Seluruh pelamar perusahaan dalam sekali permintaan (Direktur/HRD)
+    description: Mengembalikan daftar lamaran lintas lowongan beserta ringkasan jumlah per status.
+    tags: [APPLICATION]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: jobId
+        in: query
+        description: Saring berdasarkan satu lowongan
+        schema: { type: string }
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [pending, processing, accepted, rejected]
+      - name: search
+        in: query
+        description: Cari berdasarkan nama atau NIM pelamar
+        schema: { type: string }
+    responses:
+      200:
+        description: Daftar pelamar beserta ringkasan per status
+      403:
+        description: Hanya Direktur atau HRD perusahaan
+
 /api/applications/{id}:
   delete:
     summary: Batalkan lamaran (mahasiswa)

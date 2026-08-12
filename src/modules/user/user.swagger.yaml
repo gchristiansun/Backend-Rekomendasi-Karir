@@ -64,6 +64,52 @@ tags:
         description: Detail pengguna
       404:
         description: Pengguna tidak ditemukan
+  patch:
+    summary: Perbarui data pengguna dari Manajemen Pengguna (Admin Utama)
+    description: >
+      Field major hanya berlaku untuk mahasiswa, sedangkan nip untuk admin
+      kampus atau anggota perusahaan. Seluruh field bersifat opsional.
+    tags: [USER]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name: { type: string, minLength: 3 }
+              email: { type: string, format: email }
+              phone: { type: string, minLength: 6, maxLength: 30 }
+              status:
+                type: string
+                enum: [active, pending, suspended, deleted]
+              major:
+                type: string
+                minLength: 2
+                description: Khusus mahasiswa
+              nip:
+                type: string
+                minLength: 2
+                description: Khusus admin kampus atau anggota perusahaan
+    responses:
+      200:
+        description: Pengguna diperbarui
+      400:
+        description: Data tidak valid
+      403:
+        description: Hanya Super Admin
+      404:
+        description: Pengguna tidak ditemukan
+      409:
+        description: Email sudah digunakan akun lain
+
   delete:
     summary: Soft-delete pengguna (Admin Utama)
     tags: [USER]

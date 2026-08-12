@@ -60,3 +60,95 @@ tags:
     responses:
       200:
         description: Nilai dihapus
+
+/api/grades/subject/{subjectId}:
+  get:
+    summary: Data nilai satu mata kuliah beserta CLO-nya
+    description: >
+      Mengembalikan daftar mahasiswa pengambil mata kuliah, bobot tiap CLO, dan
+      nilai per CLO. Untuk Admin Kampus dan Kaprodi, data dibatasi pada
+      universitas akun tersebut.
+    tags: [GRADE]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: subjectId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      200:
+        description: Data nilai mata kuliah
+      403:
+        description: Akun tidak terhubung dengan universitas mana pun
+      404:
+        description: Mata kuliah tidak ditemukan
+
+/api/grades/subject/{subjectId}/clo-weights:
+  patch:
+    summary: Atur bobot tiap CLO pada sebuah mata kuliah
+    description: Total seluruh bobot wajib tepat 100 persen dan setiap CLO harus milik mata kuliah tersebut.
+    tags: [GRADE]
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: subjectId
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [weights]
+            properties:
+              weights:
+                type: array
+                items:
+                  type: object
+                  required: [cloId, weight]
+                  properties:
+                    cloId: { type: string }
+                    weight: { type: integer, example: 40 }
+    responses:
+      200:
+        description: Bobot CLO diperbarui
+      400:
+        description: Total bobot bukan 100 persen, atau ada CLO yang bukan milik mata kuliah ini
+
+/api/grades/clo:
+  post:
+    summary: Simpan nilai per CLO seorang mahasiswa
+    description: >
+      Nilai CLO menjadi bobot penguasaan pada pencocokan semantik, karena
+      penilaian memang dilakukan per capaian pembelajaran.
+    tags: [GRADE]
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [studentId, subjectId, scores]
+            properties:
+              studentId: { type: string }
+              subjectId: { type: string }
+              scores:
+                type: array
+                items:
+                  type: object
+                  required: [cloId, score]
+                  properties:
+                    cloId: { type: string }
+                    score: { type: number, example: 85 }
+    responses:
+      200:
+        description: Nilai CLO disimpan
+      400:
+        description: Mata kuliah belum memiliki CLO, atau ada CLO yang bukan miliknya
+      404:
+        description: Mahasiswa tidak ditemukan
