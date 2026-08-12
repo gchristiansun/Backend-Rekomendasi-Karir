@@ -8,7 +8,9 @@ import {
   rescaleSimilarity,
   isPassedGrade,
   parseVector,
-  gradeWeight, 
+  getCloScores,
+  getCloScoresForStudents,
+  gradeWeight,
   gradeLabel,
   type CloVector,
 } from "../../utils/semanticMatching";
@@ -25,10 +27,17 @@ const toRequirementVectors = (job: any): { requirement: string; vec: number[] }[
     .map((r: any) => ({ requirement: r.requirement, vec: parseVector(r.embedding) }))
     .filter((r: any) => !!r.vec) as { requirement: string; vec: number[] }[];
 
-// Kumpulkan CLO mahasiswa dari daftar matkul yang diambil.
-const studentClosOf = async (subjectsTaken: any[]): Promise<CloVector[]> => {
-  const bySubject = await getCloVectorsBySubject();
-  return collectStudentCloVectors(subjectsTaken, bySubject);
+// Kumpulkan CLO mahasiswa dari daftar matkul yang diambil, lengkap dengan
+// nilai tiap CLO sebagai bobot penguasaannya.
+const studentClosOf = async (
+  studentId: string,
+  subjectsTaken: any[],
+): Promise<CloVector[]> => {
+  const [bySubject, cloScores] = await Promise.all([
+    getCloVectorsBySubject(),
+    getCloScores(studentId),
+  ]);
+  return collectStudentCloVectors(subjectsTaken, bySubject, cloScores);
 };
 
 // ============================================================
@@ -45,7 +54,7 @@ export const matchJobsForStudent = async (studentId: string, opts: { search?: st
     }),
   ]);
   const owned = ownedRows.map((r: any) => r.skillId);
-  const studentClos = await studentClosOf(subjectsTaken);
+  const studentClos = await studentClosOf(studentId, subjectsTaken);
 
   const jobs = await prisma.job.findMany({
     where: {
@@ -152,7 +161,9 @@ const buildRequirementAnalysis = async (job: any, cloVecs: CloVector[]) => {
           .map((clo) => {
             let sim = 0;
             for (let i = 0; i < clo.vec.length; i++) sim += clo.vec[i] * reqVec[i];
-            const skorKemiripan = Math.round(rescaleSimilarity(sim) * 100);
+            // Dibulatkan sekali di akhir agar sama persis dengan skor
+            // yang dihitung computeSemanticMatch.
+            const kemiripan = rescaleSimilarity(sim) * 100;
             const bobot = clo.weight ?? 1;
             return {
               id: clo.cloId,
@@ -160,9 +171,9 @@ const buildRequirementAnalysis = async (job: any, cloVecs: CloVector[]) => {
               deskripsi: clo.text || "Parafrase CLO belum tersedia.",
               matkul: subjectById.get(clo.subjectId)?.name ?? "-",
               nilai: clo.gradeLabel ?? "-",
-              skorKemiripan,
+              skorKemiripan: Math.round(kemiripan),
               bobotNilai: bobot,
-              kontribusi: Math.round(skorKemiripan * bobot),
+              kontribusi: Math.round(kemiripan * bobot),
             };
           })
           .sort((a, b) => b.kontribusi - a.kontribusi)
@@ -203,11 +214,21 @@ export const matchJobDetail = async (studentId: string, jobId: string) => {
 
   const ruleMatch = computeMatch(owned, toRequired(job));
 
-  const studentClos = await studentClosOf(subjectsTaken);
+  const studentClos = await studentClosOf(studentId, subjectsTaken);
   const reqVecs = toRequirementVectors(job);
   const semantic =
     reqVecs.length > 0 && studentClos.length > 0
       ? computeSemanticMatch(studentClos, reqVecs)
+      : null;
+
+  const requirementAnalysis = await buildRequirementAnalysis(job, studentClos);
+
+  // Skor kompetensi = rata-rata match tanggung jawab yang benar-benar dapat
+  // dinilai, dihitung dari angka yang sama dengan yang ditampilkan di layar.
+  const dinilai = requirementAnalysis.filter((r: any) => r.cloItems.length > 0);
+  const skorSemantik =
+    semantic && dinilai.length > 0
+      ? Math.round(dinilai.reduce((a: number, r: any) => a + r.matchScore, 0) / dinilai.length)
       : null;
 
   return {
@@ -226,14 +247,12 @@ export const matchJobDetail = async (studentId: string, jobId: string) => {
           .filter(Boolean),
       })),
     },
-    matchScore: semantic ? semantic.score : ruleMatch.score,
+    matchScore: skorSemantik ?? ruleMatch.score,
     matchScoreRule: ruleMatch.score,
-    matchMethod: semantic ? "semantic" : "skill",
-    // rincian per persyaratan: berguna untuk menjelaskan skor ke mahasiswa
-    requirementBreakdown: semantic?.perRequirement ?? [],
-    // analisis lengkap per persyaratan (kemiripan x bobot nilai = kontribusi),
+    matchMethod: skorSemantik != null ? "semantic" : "skill",
+    // analisis per persyaratan (kemiripan x bobot nilai CLO = kontribusi),
     // sama dengan yang dilihat HRD pada detail kandidat
-    requirementAnalysis: await buildRequirementAnalysis(job, studentClos),
+    requirementAnalysis,
     coveredRequirements: semantic?.covered ?? null,
     matchedSkills: ruleMatch.matchedSkills,
     gapSkills: ruleMatch.missingSkills,
@@ -267,12 +286,19 @@ export const matchCandidatesForJob = async (jobId: string) => {
     },
   });
 
+  // Nilai CLO seluruh kandidat diambil sekali agar tidak query per mahasiswa.
+  const cloScoresByStudent = await getCloScoresForStudents(students.map((s: any) => s.id));
+
   const ranked = students
     .map((s: any) => {
       const owned = s.skills.map((sk: any) => sk.skillId);
       const ruleMatch = computeMatch(owned, required);
 
-      const studentClos = collectStudentCloVectors(s.subjectsTaken, bySubject);
+      const studentClos = collectStudentCloVectors(
+        s.subjectsTaken,
+        bySubject,
+        cloScoresByStudent.get(s.id),
+      );
       const semantic =
         reqVecs.length > 0 && studentClos.length > 0
           ? computeSemanticMatch(studentClos, reqVecs)
@@ -379,10 +405,17 @@ export const listCompanyCandidates = async (
   // Lowongan yang siap dinilai secara semantik (punya embedding persyaratan).
   const jobsWithVec = (jobs as any[]).filter((j) => reqVecByJob.has(j.id));
 
+  // Nilai CLO seluruh kandidat diambil sekali agar tidak query per mahasiswa.
+  const cloScoresByStudent = await getCloScoresForStudents(students.map((s: any) => s.id));
+
   const candidates = students
     .map((student: any) => {
       const owned = student.skills.map((s: any) => s.skillId);
-      const studentClos = collectStudentCloVectors(student.subjectsTaken, bySubject);
+      const studentClos = collectStudentCloVectors(
+        student.subjectsTaken,
+        bySubject,
+        cloScoresByStudent.get(student.id),
+      );
       // Bandingkan hanya antar lowongan dengan metode penilaian yang sama.
       // Skor semantik dan skor berbasis keahlian tidak setara skalanya, sehingga
       // mencampurnya membuat lowongan bersemantik selalu menang.
@@ -483,10 +516,14 @@ export const getCandidateDetail = async (
 
   const owned = student.skills.map((s: any) => s.skillId);
 
-  // Vektor CLO mahasiswa (hanya dari matkul yang lulus), lengkap dengan
-  // bobot nilai dan nama mata kuliahnya.
+  // Vektor CLO mahasiswa (hanya dari matkul yang lulus), berbobot nilai
+  // tiap CLO dan lengkap dengan nama mata kuliahnya.
   const bySubject = await getCloVectorsBySubject();
-  const cloVecs = collectStudentCloVectors(student.subjectsTaken, bySubject);
+  const cloVecs = collectStudentCloVectors(
+    student.subjectsTaken,
+    bySubject,
+    await getCloScores(studentId),
+  );
 
   const subjectIds = Array.from(new Set(cloVecs.map((c) => c.subjectId)));
   const subjects = subjectIds.length
@@ -507,7 +544,8 @@ export const getCandidateDetail = async (
             .map((clo) => {
               let sim = 0;
               for (let i = 0; i < clo.vec.length; i++) sim += clo.vec[i] * reqVec[i];
-              const skorKemiripan = Math.round(rescaleSimilarity(sim) * 100);
+              // Dibulatkan sekali di akhir agar seragam dengan sisi mahasiswa.
+              const kemiripan = rescaleSimilarity(sim) * 100;
               const bobot = clo.weight ?? 1;
               return {
                 id: clo.cloId,
@@ -515,9 +553,9 @@ export const getCandidateDetail = async (
                 deskripsi: clo.text || "Parafrase CLO belum tersedia.",
                 matkul: subjectById.get(clo.subjectId)?.name ?? "-",
                 nilai: clo.gradeLabel ?? "-",
-                skorKemiripan,
+                skorKemiripan: Math.round(kemiripan),
                 bobotNilai: bobot,
-                kontribusi: Math.round(skorKemiripan * bobot),
+                kontribusi: Math.round(kemiripan * bobot),
               };
             })
             .sort((a, b) => b.kontribusi - a.kontribusi)

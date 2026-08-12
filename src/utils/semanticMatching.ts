@@ -107,23 +107,65 @@ export const isPassedGrade = (score?: number | null, grade?: string | null): boo
 /**
  * Kumpulkan vektor CLO dari matkul yang SUDAH DILULUSI mahasiswa.
  * subjectsTaken cukup berisi { subjectId, score, grade }.
+ *
+ * Bobot penguasaan diambil dari nilai CLO masing-masing (tabel CLOGrade),
+ * karena penilaian memang dilakukan per capaian pembelajaran. Nilai mata
+ * kuliah hanya dipakai sebagai cadangan bila CLO itu belum dinilai.
  */
 export const collectStudentCloVectors = (
   subjectsTaken: any[],
   bySubject: Map<string, CloVector[]>,
+  cloScores?: Map<string, number>,
 ): CloVector[] => {
   const out: CloVector[] = [];
+  const bobotMatkul = (st: any) => gradeWeight(st.score, st.grade);
+
   for (const st of subjectsTaken ?? []) {
     if (!isPassedGrade(st.score, st.grade)) continue;
     const clos = bySubject.get(st.subjectId);
     if (!clos) continue;
-    // Bobot menempel pada matkul, tetapi dibawa per CLO karena penilaian
-    // dilakukan per CLO.
-    const w = gradeWeight(st.score, st.grade);
-    const label = gradeLabel(st.score, st.grade);
-    for (const c of clos) out.push({ ...c, weight: w, gradeLabel: label });
+
+    for (const c of clos) {
+      const nilaiClo = cloScores?.get(c.cloId);
+      const adaNilaiClo = typeof nilaiClo === "number" && Number.isFinite(nilaiClo);
+
+      out.push({
+        ...c,
+        weight: adaNilaiClo
+          ? Math.max(0, Math.min(1, nilaiClo / 100))
+          : bobotMatkul(st),
+        gradeLabel: adaNilaiClo ? String(nilaiClo) : gradeLabel(st.score, st.grade),
+      });
+    }
   }
   return out.slice(0, MAX_CLO_PER_STUDENT);
+};
+
+// Ambil nilai tiap CLO milik satu/banyak mahasiswa -> peta cloId => nilai.
+export const getCloScores = async (studentId: string): Promise<Map<string, number>> => {
+  const rows = await prisma.cLOGrade.findMany({
+    where: { studentId },
+    select: { cloId: true, score: true },
+  });
+  return new Map(rows.map((r: any) => [r.cloId, r.score]));
+};
+
+export const getCloScoresForStudents = async (
+  studentIds: string[],
+): Promise<Map<string, Map<string, number>>> => {
+  const out = new Map<string, Map<string, number>>();
+  if (studentIds.length === 0) return out;
+
+  const rows = await prisma.cLOGrade.findMany({
+    where: { studentId: { in: studentIds } },
+    select: { studentId: true, cloId: true, score: true },
+  });
+  for (const r of rows as any[]) {
+    const peta = out.get(r.studentId) ?? new Map<string, number>();
+    peta.set(r.cloId, r.score);
+    out.set(r.studentId, peta);
+  }
+  return out;
 };
 
 // ============================================================
@@ -166,10 +208,11 @@ export interface SemanticMatchResult {
 }
 
 /**
- * Skor akhir = rata-rata kontribusi tiap CLO, di mana
- *   kontribusi = kemiripan semantik terbaik CLO itu x bobot nilai matkulnya.
- * Menjawab "seberapa besar kompetensi yang benar-benar dikuasai mahasiswa
- * menyentuh kebutuhan lowongan ini".
+ * Skor akhir = rata-rata match tiap tanggung jawab, di mana
+ *   match tanggung jawab = kontribusi CLO tertinggi untuk tanggung jawab itu,
+ *   kontribusi = kemiripan semantik x bobot nilai CLO tersebut.
+ * Menjawab "seberapa jauh tiap tanggung jawab lowongan sudah tertutupi oleh
+ * capaian pembelajaran yang benar-benar dikuasai mahasiswa".
  */
 export const computeSemanticMatch = (
   cloVecs: CloVector[],
@@ -185,9 +228,8 @@ export const computeSemanticMatch = (
   };
   if (cloVecs.length === 0 || reqVecs.length === 0) return kosong;
 
-  // --- kontribusi per CLO (dasar skor) ---
+  // --- kontribusi tiap CLO terhadap tanggung jawab terdekatnya (penjelasan) ---
   const perClo: SemanticMatchResult["perClo"] = [];
-  let totalKontribusi = 0;
 
   for (const clo of cloVecs) {
     let best = -1;
@@ -204,7 +246,6 @@ export const computeSemanticMatch = (
     const similarityScore = Math.round(rescale(best) * 100);
     const weight = clo.weight ?? 1;
     const contribution = Math.round(similarityScore * weight);
-    totalKontribusi += contribution;
 
     perClo.push({
       cloId: clo.cloId,
@@ -219,32 +260,44 @@ export const computeSemanticMatch = (
     });
   }
 
-  // --- cakupan per requirement (hanya untuk penjelasan, bukan skor) ---
+  // --- match per tanggung jawab: diwakili CLO dengan kontribusi tertinggi ---
   const perRequirement: SemanticMatchResult["perRequirement"] = [];
   let covered = 0;
+  let totalMatchRequirement = 0;
 
   for (const req of reqVecs) {
-    let best = -1;
+    let bestSim = -1;          // kemiripan tertinggi, untuk penilaian cakupan
+    let bestKontribusi = -1;   // kontribusi tertinggi, penentu match
     let bestClo: CloVector | null = null;
+
     for (const clo of cloVecs) {
       const sim = dot(clo.vec, req.vec);
-      if (sim > best) {
-        best = sim;
+      const kontribusi = rescale(sim) * 100 * (clo.weight ?? 1);
+
+      if (sim > bestSim) bestSim = sim;
+      if (kontribusi > bestKontribusi) {
+        bestKontribusi = kontribusi;
         bestClo = clo;
       }
     }
-    if (best >= COVERAGE_THRESHOLD) covered += 1;
+
+    if (bestSim >= COVERAGE_THRESHOLD) covered += 1;
+
+    const matchRequirement = Math.round(Math.max(0, bestKontribusi));
+    totalMatchRequirement += matchRequirement;
+
     perRequirement.push({
       requirement: req.requirement,
-      similarity: Number(best.toFixed(4)),
-      score: Math.round(rescale(best) * 100),
+      similarity: Number(bestSim.toFixed(4)),
+      score: matchRequirement,
       cloCode: bestClo?.code ?? null,
       cloText: bestClo?.text ?? null,
     });
   }
 
   return {
-    score: Math.round(totalKontribusi / cloVecs.length),
+    // Skor kompetensi = rata-rata match seluruh tanggung jawab.
+    score: Math.round(totalMatchRequirement / reqVecs.length),
     covered,
     totalRequirements: reqVecs.length,
     totalClos: cloVecs.length,
