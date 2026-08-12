@@ -1,5 +1,6 @@
 import prisma from "../../config/prisma";
 import { computeMatch } from "../../utils/matching";
+import { getSemanticScores, pairKey } from "../../utils/semanticMatching";
 import {
   APPLICATION_STATUS,
   APPLICATION_STATUS_LABEL,
@@ -202,8 +203,15 @@ export const listCompanyApplications = async (
     }),
   ]);
 
-  // Skor kecocokan tidak disimpan sebagai kolom -> dihitung di sini,
-  // pakai mesin yang sama dengan halaman rekomendasi kandidat.
+  // Skor kecocokan dihitung ULANG setiap permintaan terhadap lowongan yang
+  // dilamar, bukan diambil dari matchSnapshot yang dibekukan saat melamar.
+  // Dengan begitu angkanya selalu sama dengan skor kandidat pada posisi tujuan
+  // di halaman Rekomendasi Kandidat maupun Detail Kandidat, dan ikut berubah
+  // ketika nilai, sertifikat, atau persyaratan lowongan diperbarui.
+  const semanticScores = await getSemanticScores(
+    rows.map((app: any) => ({ studentId: app.studentId, jobId: app.jobId })),
+  );
+
   const applications = rows
     .map((app: any) => {
       const owned = (app.student?.skills ?? []).map((s: any) => s.skillId);
@@ -214,12 +222,18 @@ export const listCompanyApplications = async (
       }));
       const match = computeMatch(owned, required);
 
+      // Cadangan skor berbasis keahlian dipakai bila persyaratan lowongan belum
+      // punya embedding atau mahasiswa belum punya nilai mata kuliah.
+      const semantic = semanticScores.get(pairKey(app.studentId, app.jobId));
+
       return {
         id: app.id,
         status: app.status,
         coverLetter: app.coverLetter,
         created_at: app.created_at,
-        matchScore: match.score,
+        matchScore: semantic ?? match.score,
+        matchScoreRule: match.score,
+        matchMethod: semantic != null ? "semantic" : "skill",
         matchedSkills: match.matchedSkills,
         gapSkills: match.missingSkills,
         job: {

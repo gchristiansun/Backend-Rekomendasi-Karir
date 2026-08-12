@@ -347,3 +347,89 @@ export const gradeLabel = (score?: number | null, grade?: string | null): string
   if (typeof score === "number") return String(score);
   return "-";
 };
+
+// ============================================================
+// SKOR SEMANTIK UNTUK BANYAK PASANGAN (MAHASISWA, LOWONGAN)
+// ------------------------------------------------------------
+// Daftar pelamar dan daftar undangan perlu menampilkan skor kecocokan
+// mahasiswa terhadap LOWONGAN YANG DITUJU, bukan skor yang dibekukan saat
+// melamar. Menghitungnya satu per satu berarti puluhan kueri, jadi seluruh
+// bahan (CLO, nilai CLO, matkul yang ditempuh, vektor persyaratan) diambil
+// sekali lalu dipakai bersama.
+//
+// Angka yang dihasilkan identik dengan skor pada halaman Rekomendasi Kandidat
+// dan Detail Kandidat, karena memakai computeSemanticMatch yang sama.
+// ============================================================
+
+/** Kunci peta hasil; dipakai juga oleh pemanggil untuk membaca skornya. */
+export const pairKey = (studentId: string, jobId: string): string => `${studentId}|${jobId}`;
+
+export const getSemanticScores = async (
+  pairs: { studentId: string; jobId: string }[],
+): Promise<Map<string, number>> => {
+  const hasil = new Map<string, number>();
+  if (pairs.length === 0) return hasil;
+
+  const studentIds = Array.from(new Set(pairs.map((p) => p.studentId)));
+  const jobIds = Array.from(new Set(pairs.map((p) => p.jobId)));
+
+  const [bySubject, takenRows, cloScores, reqRows] = await Promise.all([
+    getCloVectorsBySubject(),
+    prisma.subjectTaken.findMany({
+      where: { studentId: { in: studentIds } },
+      select: { studentId: true, subjectId: true, score: true, grade: true },
+    }),
+    getCloScoresForStudents(studentIds),
+    prisma.jobRequirement.findMany({
+      where: { jobId: { in: jobIds }, embedding: { not: null } },
+      select: { jobId: true, requirement: true, embedding: true },
+      orderBy: { order: "asc" },
+    }),
+  ]);
+
+  const takenByStudent = new Map<string, any[]>();
+  for (const r of takenRows as any[]) {
+    const list = takenByStudent.get(r.studentId) ?? [];
+    list.push(r);
+    takenByStudent.set(r.studentId, list);
+  }
+
+  const reqVecByJob = new Map<string, RequirementVector[]>();
+  for (const r of reqRows as any[]) {
+    const vec = parseVector(r.embedding);
+    if (!vec) continue;
+    const list = reqVecByJob.get(r.jobId) ?? [];
+    list.push({ requirement: r.requirement, vec });
+    reqVecByJob.set(r.jobId, list);
+  }
+
+  // Vektor CLO tiap mahasiswa dihitung sekali, dipakai untuk semua lowongannya.
+  const closByStudent = new Map<string, CloVector[]>();
+  const closOf = (studentId: string): CloVector[] => {
+    let clos = closByStudent.get(studentId);
+    if (!clos) {
+      clos = collectStudentCloVectors(
+        takenByStudent.get(studentId) ?? [],
+        bySubject,
+        cloScores.get(studentId),
+      );
+      closByStudent.set(studentId, clos);
+    }
+    return clos;
+  };
+
+  for (const p of pairs) {
+    const kunci = pairKey(p.studentId, p.jobId);
+    if (hasil.has(kunci)) continue;
+
+    const reqVecs = reqVecByJob.get(p.jobId);
+    if (!reqVecs || reqVecs.length === 0) continue; // embedding belum ada -> pemanggil pakai cadangan
+
+    const clos = closOf(p.studentId);
+    if (clos.length === 0) continue; // belum ada nilai matkul -> pemanggil pakai cadangan
+
+    hasil.set(kunci, computeSemanticMatch(clos, reqVecs).score);
+  }
+
+  return hasil;
+};

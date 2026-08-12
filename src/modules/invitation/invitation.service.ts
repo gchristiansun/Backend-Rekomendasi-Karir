@@ -1,5 +1,6 @@
 import prisma from "../../config/prisma";
 import { computeMatch } from "../../utils/matching";
+import { getSemanticScores, pairKey } from "../../utils/semanticMatching";
 import { HttpError } from "../../utils/httpError";
 import {
   INVITATION_STATUS,
@@ -35,7 +36,9 @@ const invitationInclude = {
 };
 
 // Bentuk keluaran disamakan dengan daftar pelamar supaya mudah ditampilkan.
-const shapeInvitation = (inv: any) => {
+// semanticScore diisi pemanggil dari getSemanticScores; bila kosong (embedding
+// persyaratan belum ada / mahasiswa belum punya nilai) dipakai skor keahlian.
+const shapeInvitation = (inv: any, semanticScore?: number) => {
   const owned = (inv.student?.skills ?? []).map((s: any) => s.skillId);
   const required = (inv.job?.skills ?? []).map((js: any) => ({
     skillId: js.skillId,
@@ -50,7 +53,9 @@ const shapeInvitation = (inv: any) => {
     message: inv.message,
     created_at: inv.created_at,
     respondedAt: inv.respondedAt,
-    matchScore: match.score,
+    matchScore: semanticScore ?? match.score,
+    matchScoreRule: match.score,
+    matchMethod: semanticScore != null ? "semantic" : "skill",
     job: {
       id: inv.job.id,
       title: inv.job.title,
@@ -67,6 +72,21 @@ const shapeInvitation = (inv: any) => {
       university: inv.student.university,
     },
   };
+};
+
+// Skor semantik satu undangan terhadap lowongan tujuannya.
+const skorSatu = async (inv: any): Promise<number | undefined> => {
+  const skor = await getSemanticScores([{ studentId: inv.studentId, jobId: inv.jobId }]);
+  return skor.get(pairKey(inv.studentId, inv.jobId));
+};
+
+// Bungkus sekumpulan undangan sekaligus: seluruh skor dihitung dalam satu
+// putaran supaya tidak ada kueri per baris.
+const shapeMany = async (rows: any[]) => {
+  const skor = await getSemanticScores(
+    rows.map((inv) => ({ studentId: inv.studentId, jobId: inv.jobId })),
+  );
+  return rows.map((inv) => shapeInvitation(inv, skor.get(pairKey(inv.studentId, inv.jobId))));
 };
 
 // ============================================================
@@ -145,7 +165,7 @@ export const createInvitation = async (
     },
   });
 
-  return shapeInvitation(invitation);
+  return shapeInvitation(invitation, await skorSatu(invitation));
 };
 
 export const listCompanyInvitations = async (
@@ -162,7 +182,7 @@ export const listCompanyInvitations = async (
     orderBy: { created_at: "desc" },
   });
 
-  const invitations = rows.map(shapeInvitation);
+  const invitations = await shapeMany(rows);
   const summary = {
     total: invitations.length,
     pending: invitations.filter((i) => i.status === INVITATION_STATUS.PENDING).length,
@@ -188,7 +208,7 @@ export const cancelInvitation = async (companyId: string, invitationId: string) 
     data: { status: INVITATION_STATUS.CANCELLED, respondedAt: new Date() },
     include: invitationInclude,
   });
-  return shapeInvitation(updated);
+  return shapeInvitation(updated, await skorSatu(updated));
 };
 
 // ============================================================
@@ -200,7 +220,7 @@ export const listStudentInvitations = async (studentId: string) => {
     include: invitationInclude,
     orderBy: { created_at: "desc" },
   });
-  return rows.map(shapeInvitation);
+  return shapeMany(rows);
 };
 
 export const respondInvitation = async (
@@ -221,7 +241,7 @@ export const respondInvitation = async (
       data: { status: INVITATION_STATUS.DECLINED, respondedAt: new Date() },
       include: invitationInclude,
     });
-    return shapeInvitation(updated);
+    return shapeInvitation(updated, await skorSatu(updated));
   }
 
   // Terima undangan -> jadi lamaran sungguhan.
@@ -249,5 +269,5 @@ export const respondInvitation = async (
     });
   });
 
-  return shapeInvitation(updated);
+  return shapeInvitation(updated, await skorSatu(updated));
 };
