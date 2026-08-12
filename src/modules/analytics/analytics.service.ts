@@ -165,6 +165,17 @@ export const getUniversityDashboard = async (universityId: string) => {
 //   - jobViews     : JobView (peninjauan lowongan oleh mahasiswa)
 //   - applications : Application (lamaran masuk)
 // ------------------------------------------------------------
+// Kunci bucket memakai tanggal WAKTU LOKAL server. Memakai toISOString akan
+// menggeser hari untuk zona waktu positif seperti WIB (UTC+7): batas hari lokal
+// jatuh di pukul 17.00 UTC hari sebelumnya, sehingga aktivitas hari berjalan
+// tidak menemukan bucket-nya dan terbuang diam-diam.
+const kunciTanggalLokal = (nilai: Date): string => {
+  const d = new Date(nilai);
+  const bulan = String(d.getMonth() + 1).padStart(2, "0");
+  const tanggal = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${bulan}-${tanggal}`;
+};
+
 export const getActivityTrends = async (days: number) => {
   const since = new Date();
   since.setHours(0, 0, 0, 0);
@@ -186,17 +197,18 @@ export const getActivityTrends = async (days: number) => {
   for (let i = 0; i < days; i++) {
     const d = new Date(since);
     d.setDate(since.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
+    const key = kunciTanggalLokal(d);
     buckets.set(key, { date: key, jobViews: 0, applications: 0 });
   }
 
-  const keyOf = (dt: Date) => new Date(dt).toISOString().slice(0, 10);
+  // Satu mahasiswa bisa melihat dan melamar berkali-kali dalam sehari;
+  // tiap kejadian dihitung, bukan dihitung unik per mahasiswa.
   for (const v of views as any[]) {
-    const b = buckets.get(keyOf(v.created_at));
+    const b = buckets.get(kunciTanggalLokal(v.created_at));
     if (b) b.jobViews += 1;
   }
   for (const a of apps as any[]) {
-    const b = buckets.get(keyOf(a.created_at));
+    const b = buckets.get(kunciTanggalLokal(a.created_at));
     if (b) b.applications += 1;
   }
 
@@ -551,7 +563,7 @@ export const getMasterCourses = async (opts: { search?: string; skip: number; ta
       where,
       include: {
         university: { select: { id: true, name: true } },
-        clos: { select: { id: true, code: true, text: true, skills: true } },
+        clos: { select: { id: true, code: true, text: true, paraphrase: true, skills: true } },
       },
       orderBy: { updated_at: "desc" },
       skip: opts.skip,
@@ -570,7 +582,9 @@ export const getMasterCourses = async (opts: { search?: string; skip: number; ta
     clos: s.clos.map((c: any, i: number) => ({
       id: c.id,
       name: c.code ?? `CLO ${i + 1}`,
-      text: c.text,
+      // Parafrase adalah rumusan ringkas hasil olahan; teks asli RPS hanya
+      // dipakai bila parafrasenya belum tersedia.
+      text: c.paraphrase?.trim() ? c.paraphrase : c.text,
       // CLO.skills disimpan sebagai string dipisah koma
       skills: c.skills
         ? String(c.skills).split(",").map((x: string) => x.trim()).filter(Boolean)
