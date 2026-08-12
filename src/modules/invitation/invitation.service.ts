@@ -17,6 +17,7 @@ const invitationInclude = {
       type: true,
       status: true,
       companyId: true,
+      company: { select: { id: true, name: true, logoUrl: true } },
       skills: { include: { skill: { select: { id: true, name: true } } } },
     },
   },
@@ -56,6 +57,7 @@ const shapeInvitation = (inv: any) => {
       department: inv.job.department,
       type: inv.job.type,
     },
+    company: inv.job.company ?? null,
     student: {
       id: inv.student.id,
       nim: inv.student.nim,

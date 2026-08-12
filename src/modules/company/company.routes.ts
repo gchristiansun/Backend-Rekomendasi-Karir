@@ -11,6 +11,7 @@ import {
   updateCompanyDocsHandler,
   updateCompanyByAdminHandler,
   reevaluateCompanyHandler,
+  companyPublicHandler,
 } from "./company.controller";
 import { authMiddleware } from "../../middleware/auth.middleware";
 import { authorizeRole } from "../../middleware/authorizeRole";
@@ -45,6 +46,9 @@ router.patch(
   ]),
   updateCompanyDocsHandler,
 );
+
+// Profil publik perusahaan: semua user login (dipakai halaman detail perusahaan mahasiswa)
+router.get("/:id/public", authMiddleware, companyPublicHandler);
 
 const ADMIN = authorizeRole(ROLES.ADMIN);
 

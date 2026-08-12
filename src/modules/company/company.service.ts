@@ -1,6 +1,6 @@
 import prisma from "../../config/prisma";
 import { UpdateCompanyInput } from "./company.validation";
-import { COMPANY_STATUS } from "../../constants";
+import { COMPANY_STATUS, JOB_STATUS } from "../../constants";
 import { HttpError } from "../../utils/httpError";
 import { supabase, SUPABASE_COMPANY_BUCKET } from "../../config/supabase";
 
@@ -47,6 +47,40 @@ export const getCompanyById = (id: string) =>
       _count: { select: { jobs: true } },
     },
   });
+
+// Profil publik perusahaan (untuk mahasiswa): field aman + lowongan aktif.
+export const getCompanyPublicProfile = async (id: string) => {
+  const company = await prisma.company.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      industry: true,
+      description: true,
+      website: true,
+      logoUrl: true,
+      size: true,
+      address: true,
+      status: true,
+    },
+  });
+  if (!company) return null;
+
+  const jobs = await prisma.job.findMany({
+    where: { companyId: id, status: JOB_STATUS.ACTIVE },
+    select: {
+      id: true,
+      title: true,
+      department: true,
+      location: true,
+      type: true,
+      created_at: true,
+    },
+    orderBy: { created_at: "desc" },
+  });
+
+  return { ...company, jobs };
+};
 
 export const updateCompany = async (companyId: string, data: any) => {
   const current = await prisma.company.findUnique({

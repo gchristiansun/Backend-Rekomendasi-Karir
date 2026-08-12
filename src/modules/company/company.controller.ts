@@ -45,6 +45,13 @@ export const getCompanyHandler = asyncHandler(async (req: Request, res: Response
   return sendSuccess(res, company, "Detail perusahaan");
 });
 
+// GET /companies/:id/public - profil publik perusahaan (bisa diakses mahasiswa)
+export const companyPublicHandler = asyncHandler(async (req: Request, res: Response) => {
+  const company = await companyService.getCompanyPublicProfile(String(req.params.id));
+  if (!company) throw new HttpError(404, "Perusahaan tidak ditemukan");
+  return sendSuccess(res, company, "Profil publik perusahaan");
+});
+
 // GET /companies/:id/review (Superadmin) - data lengkap untuk halaman verifikasi
 export const companyReviewHandler = asyncHandler(async (req: Request, res: Response) => {
   const company = await companyService.getCompanyForReview(String(req.params.id));
