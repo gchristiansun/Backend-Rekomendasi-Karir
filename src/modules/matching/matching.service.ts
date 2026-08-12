@@ -54,7 +54,7 @@ export const matchJobsForStudent = async (studentId: string, opts: { search?: st
         ? {
             OR: [
               { title: { contains: opts.search, mode: "insensitive" } },
-              { description: { contains: opts.search, mode: "insensitive" } },
+              { department: { contains: opts.search, mode: "insensitive" } },
             ],
           }
         : {}),
@@ -128,6 +128,57 @@ export const matchJobsForStudent = async (studentId: string, opts: { search?: st
 };
 
 // ============================================================
+// Analisis per persyaratan untuk halaman detail lowongan mahasiswa.
+// Bentuknya sama dengan cloItems pada detail kandidat perusahaan agar
+// kedua sisi menampilkan pencocokan semantik yang identik.
+// ============================================================
+const TOP_CLO_PER_REQUIREMENT = 3;
+
+const buildRequirementAnalysis = async (job: any, cloVecs: CloVector[]) => {
+  const subjectIds = Array.from(new Set(cloVecs.map((c) => c.subjectId)));
+  const subjects = subjectIds.length
+    ? await prisma.subject.findMany({
+        where: { id: { in: subjectIds } },
+        select: { id: true, name: true, code: true },
+      })
+    : [];
+  const subjectById = new Map(subjects.map((s: any) => [s.id, s]));
+
+  return (job.requirements ?? []).map((r: any) => {
+    const reqVec = parseVector(r.embedding);
+
+    const cloItems = reqVec
+      ? cloVecs
+          .map((clo) => {
+            let sim = 0;
+            for (let i = 0; i < clo.vec.length; i++) sim += clo.vec[i] * reqVec[i];
+            const skorKemiripan = Math.round(rescaleSimilarity(sim) * 100);
+            const bobot = clo.weight ?? 1;
+            return {
+              id: clo.cloId,
+              kode: clo.code,
+              deskripsi: clo.text || "Parafrase CLO belum tersedia.",
+              matkul: subjectById.get(clo.subjectId)?.name ?? "-",
+              nilai: clo.gradeLabel ?? "-",
+              skorKemiripan,
+              bobotNilai: bobot,
+              kontribusi: Math.round(skorKemiripan * bobot),
+            };
+          })
+          .sort((a, b) => b.kontribusi - a.kontribusi)
+          .slice(0, TOP_CLO_PER_REQUIREMENT)
+      : [];
+
+    return {
+      id: r.id,
+      deskripsi: r.requirement,
+      matchScore: cloItems.length > 0 ? cloItems[0].kontribusi : 0,
+      cloItems,
+    };
+  });
+};
+
+// ============================================================
 // Detail kecocokan satu lowongan untuk satu mahasiswa.
 // ============================================================
 export const matchJobDetail = async (studentId: string, jobId: string) => {
@@ -164,7 +215,6 @@ export const matchJobDetail = async (studentId: string, jobId: string) => {
       id: job.id,
       title: job.title,
       department: (job as any).department,
-      description: job.description,
       company: job.company,
       requiredSkills: job.skills.map((s: any) => s.skill),
       requirements: ((job as any).requirements ?? []).map((r: any) => ({
@@ -181,6 +231,9 @@ export const matchJobDetail = async (studentId: string, jobId: string) => {
     matchMethod: semantic ? "semantic" : "skill",
     // rincian per persyaratan: berguna untuk menjelaskan skor ke mahasiswa
     requirementBreakdown: semantic?.perRequirement ?? [],
+    // analisis lengkap per persyaratan (kemiripan x bobot nilai = kontribusi),
+    // sama dengan yang dilihat HRD pada detail kandidat
+    requirementAnalysis: await buildRequirementAnalysis(job, studentClos),
     coveredRequirements: semantic?.covered ?? null,
     matchedSkills: ruleMatch.matchedSkills,
     gapSkills: ruleMatch.missingSkills,

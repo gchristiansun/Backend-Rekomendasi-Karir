@@ -11,6 +11,8 @@ export const createCertificate = async (input: {
   studentId: string;
   title: string;
   issuer?: string;
+  issuedAt?: string;
+  credentialId?: string;
   fileUrl?: string;
   fileType?: string;
   skillNames: string[];
@@ -21,6 +23,8 @@ export const createCertificate = async (input: {
       studentId: input.studentId,
       title: input.title,
       issuer: input.issuer,
+      issuedAt: input.issuedAt ? new Date(input.issuedAt) : null,
+      credentialId: input.credentialId,
       fileUrl: input.fileUrl,
       fileType: input.fileType,
       status: CERTIFICATE_STATUS.PENDING,

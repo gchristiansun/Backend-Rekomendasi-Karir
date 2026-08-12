@@ -262,7 +262,6 @@ model Job {
   postedById  String?
   title       String   // nama posisi
   department  String?  // departemen (Technology, Finance, ...)
-  description String?  // opsional (digantikan detail persyaratan)
   location    String?
   type        String   @default("fulltime")
   status      String   @default("active")
@@ -380,6 +379,8 @@ model Certificate {
     studentId    String
     title        String
     issuer       String?
+    issuedAt     DateTime? // tanggal terbit sertifikat
+    credentialId String?   // ID kredensial / tautan verifikasi penerbit
     fileUrl      String?
     fileType     String?
     status       String    @default("pending")

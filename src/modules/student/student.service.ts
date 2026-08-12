@@ -129,6 +129,114 @@ export const listStudents = async (opts: {
   return { total, students };
 };
 
+// ============================================================
+// Transkrip akademik mahasiswa, dikelompokkan per mata kuliah.
+// Dipakai halaman "Profile Mahasiswa": tiap matkul berisi daftar CLO
+// beserta nilai dan keahlian yang divalidasi CLO tersebut.
+// ============================================================
+const splitCsv = (value?: string | null): string[] =>
+  String(value ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+export const getMyAcademicTranscript = async (studentId: string) => {
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    include: {
+      user: { select: { id: true, name: true, email: true, phone: true } },
+      university: { select: { id: true, name: true } },
+      subjectsTaken: {
+        include: {
+          subject: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              sks: true,
+              clos: {
+                select: { id: true, code: true, text: true, paraphrase: true, skills: true },
+                orderBy: { code: "asc" },
+              },
+              // cadangan bila CLO belum punya daftar keahliannya sendiri
+              skills: { include: { skill: { select: { id: true, name: true } } } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!student) return null;
+
+  // Nilai CLO mahasiswa -> peta cloId agar mudah ditempel ke tiap CLO matkul.
+  const cloGrades = await prisma.cLOGrade.findMany({
+    where: { studentId },
+    select: { cloId: true, score: true },
+  });
+  const scoreByCloId = new Map(cloGrades.map((g: any) => [g.cloId, g.score]));
+
+  const courses = student.subjectsTaken.map((taken: any) => {
+    const subjectSkills = (taken.subject?.skills ?? []).map((ss: any) => ss.skill.name);
+
+    const clos = (taken.subject?.clos ?? []).map((clo: any, i: number) => {
+      const cloSkills = splitCsv(clo.skills);
+      return {
+        id: clo.id,
+        code: clo.code ?? `CLO ${i + 1}`,
+        description: clo.paraphrase ?? clo.text ?? "-",
+        skills: cloSkills.length > 0 ? cloSkills : subjectSkills,
+        score: scoreByCloId.get(clo.id) ?? null,
+      };
+    });
+
+    // Nilai matkul: pakai nilai transkrip bila ada, jika tidak
+    // rata-rata nilai CLO yang sudah terisi.
+    const scoredClos = clos.filter((c: any) => c.score != null);
+    const avgClo = scoredClos.length
+      ? Math.round(scoredClos.reduce((a: number, c: any) => a + Number(c.score), 0) / scoredClos.length)
+      : null;
+
+    return {
+      id: taken.subjectId,
+      code: taken.subject?.code ?? null,
+      name: taken.subject?.name ?? "-",
+      sks: taken.subject?.sks ?? null,
+      semester: taken.semester ?? null,
+      grade: taken.grade ?? null,
+      score: taken.score ?? avgClo,
+      clos,
+    };
+  });
+
+  // Semester terbaru lebih dulu, sesuai urutan default di halaman.
+  courses.sort((a: any, b: any) => (b.semester ?? 0) - (a.semester ?? 0));
+
+  const passed = student.subjectsTaken.filter((st: any) => isPassedGrade(st.score, st.grade));
+  const totalSks = passed.reduce((a: number, st: any) => a + (st.subject?.sks ?? 0), 0);
+  const totalClo = courses.reduce((a: number, c: any) => a + c.clos.length, 0);
+
+  return {
+    student: {
+      id: student.id,
+      nim: student.nim,
+      major: student.major,
+      faculty: (student as any).faculty ?? null,
+      semester: student.semester,
+      gpa: (student as any).gpa ?? null,
+      entryYear: (student as any).entryYear ?? null,
+      university: student.university,
+      user: student.user,
+    },
+    stats: {
+      gpa: (student as any).gpa ?? null,
+      totalSks,
+      totalClo,
+      totalCourses: courses.length,
+    },
+    courses,
+  };
+};
+
 // Detail akademik mahasiswa untuk halaman kampus:
 // profil + ringkasan + nilai per CLO + sertifikat.
 export const getStudentAcademicDetail = async (studentId: string) => {

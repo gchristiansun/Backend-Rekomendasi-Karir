@@ -26,6 +26,14 @@ export const getMyCompetencyHandler = asyncHandler(async (req: Request, res: Res
   return sendSuccess(res, competency, "Profil kompetensi");
 });
 
+// GET /students/me/academic -> transkrip per mata kuliah + nilai tiap CLO
+export const getMyAcademicHandler = asyncHandler(async (req: Request, res: Response) => {
+  const student = await getStudentByUserId(req.user!.id);
+  const data = await studentService.getMyAcademicTranscript(student.id);
+  if (!data) throw new HttpError(404, "Data akademik tidak ditemukan");
+  return sendSuccess(res, data, "Transkrip akademik mahasiswa");
+});
+
 export const getMySkillsHandler = asyncHandler(async (req: Request, res: Response) => {
   const student = await getStudentByUserId(req.user!.id);
   const skills = await studentService.listSkills(student.id);

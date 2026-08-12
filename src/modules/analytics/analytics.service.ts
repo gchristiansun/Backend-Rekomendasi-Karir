@@ -625,7 +625,7 @@ export const getMasterIndustries = async (opts: {
       companyName: j.company?.name ?? "-",
       industry: j.company?.industry ?? null,
       position: j.title,
-      responsibility: j.requirements[0]?.requirement ?? j.description ?? null,
+      responsibility: j.requirements[0]?.requirement ?? null,
       skills: Array.from(skillSet).slice(0, 8),
       updatedAt: j.updated_at,
     };

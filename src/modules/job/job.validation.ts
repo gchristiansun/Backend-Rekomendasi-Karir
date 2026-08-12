@@ -13,7 +13,6 @@ export const createJobSchema = z.object({
   department: z.string().min(2, "Departemen wajib diisi"),
   type: z.enum(ALL_JOB_TYPES as [string, ...string[]]).default("fulltime"),
   location: z.string().min(2, "Lokasi wajib diisi"),
-  description: z.string().optional(),
   status: z.enum(ALL_JOB_STATUS as [string, ...string[]]).default("active"),
   salaryMin: z.number().int().nonnegative().optional(),
   salaryMax: z.number().int().nonnegative().optional(),

@@ -21,7 +21,6 @@ const shapeJob = (job: any) => ({
   id: job.id,
   title: job.title,
   department: job.department,
-  description: job.description,
   location: job.location,
   type: job.type,
   status: job.status,
@@ -88,7 +87,6 @@ export const listJobs = async (opts: {
     where.OR = [
       { title: { contains: opts.search, mode: "insensitive" } },
       { department: { contains: opts.search, mode: "insensitive" } },
-      { description: { contains: opts.search, mode: "insensitive" } },
     ];
   }
 
@@ -115,7 +113,6 @@ export const createJob = async (companyId: string, postedById: string, data: Cre
       postedById,
       title: data.title,
       department: data.department,
-      description: data.description,
       location: data.location,
       type: data.type,
       status: data.status,
@@ -168,7 +165,6 @@ export const updateJob = async (id: string, data: UpdateJobInput) => {
     data: {
       title: data.title,
       department: data.department,
-      description: data.description,
       location: data.location,
       type: data.type,
       status: data.status,

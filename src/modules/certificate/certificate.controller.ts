@@ -30,7 +30,7 @@ const parseSkills = (raw: unknown): string[] => {
 // POST /certificates (mahasiswa upload, multipart/form-data, field file: "file")
 export const uploadCertificateHandler = asyncHandler(async (req: Request, res: Response) => {
   const student = await getStudentByUserId(req.user!.id);
-  const { title, issuer } = req.body;
+  const { title, issuer, issuedAt, credentialId } = req.body;
   if (!title) throw new HttpError(400, "Judul sertifikat wajib diisi");
 
   const file = req.file;
@@ -67,6 +67,8 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
     studentId: student.id,
     title,
     issuer,
+    issuedAt: issuedAt ? String(issuedAt) : undefined,
+    credentialId: credentialId ? String(credentialId) : undefined,
     fileUrl,
     fileType,
     skillNames: parseSkills(req.body.skills),

@@ -3,6 +3,7 @@ import {
   getMyProfileHandler,
   updateMyProfileHandler,
   getMyCompetencyHandler,
+  getMyAcademicHandler,
   getMySkillsHandler,
   addMySkillsHandler,
   removeMySkillHandler,
@@ -26,6 +27,7 @@ const STUDENT = authorizeRole(ROLES.STUDENT);
 router.get("/me", authMiddleware, STUDENT, getMyProfileHandler);
 router.patch("/me", authMiddleware, STUDENT, validateRequest(updateStudentSchema), updateMyProfileHandler);
 router.get("/me/competency", authMiddleware, STUDENT, getMyCompetencyHandler);
+router.get("/me/academic", authMiddleware, STUDENT, getMyAcademicHandler);
 router.get("/me/skills", authMiddleware, STUDENT, getMySkillsHandler);
 router.post("/me/skills", authMiddleware, STUDENT, validateRequest(addSkillsSchema), addMySkillsHandler);
 router.delete("/me/skills/:skillId", authMiddleware, STUDENT, removeMySkillHandler);
