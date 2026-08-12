@@ -24,19 +24,22 @@ export const requireVerifiedCompany = async (
     if (!member) throw new HttpError(403, "Anda tidak terhubung dengan perusahaan mana pun");
 
     const status = member.company.status;
-    if (status === COMPANY_STATUS.PENDING) {
-      throw new HttpError(
-        403,
-        "Akun perusahaan Anda belum diverifikasi. Anda dapat memasang lowongan setelah Superadmin menyetujui dokumen pendaftaran.",
-      );
-    }
+
+    // Perusahaan yang sudah diverifikasi berhak memakai fitur ini.
+    if (status === COMPANY_STATUS.VERIFIED) return next();
+
     if (status === COMPANY_STATUS.REJECTED) {
       throw new HttpError(
         403,
         "Pendaftaran perusahaan Anda ditolak. Perbaiki data dan dokumen di halaman Ubah Profil Perusahaan, lalu ajukan verifikasi ulang.",
       );
     }
-    throw new HttpError(403, "Perusahaan Anda tidak memiliki akses ke fitur ini.");
+
+    // Sisanya (pending, atau status tak dikenal) diperlakukan sebagai belum terverifikasi.
+    throw new HttpError(
+      403,
+      "Akun perusahaan Anda belum diverifikasi. Anda dapat memasang lowongan setelah Superadmin menyetujui dokumen pendaftaran.",
+    );
   } catch (err) {
     next(err);
   }
