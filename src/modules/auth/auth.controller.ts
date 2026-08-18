@@ -26,10 +26,18 @@ import {
 } from "./auth.validation";
 
 const REFRESH_COOKIE = "refreshToken";
+
+// Bila frontend dan backend berbeda situs - misalnya frontend di Vercel dan
+// backend lokal yang diterowongkan lewat ngrok - cookie SameSite=Strict tidak
+// akan pernah ikut terkirim, sehingga sesi selalu terputus saat refresh token.
+// Untuk kasus itu setel CROSS_SITE_COOKIE=true; SameSite=None mensyaratkan
+// Secure, dan itu terpenuhi karena ngrok menyajikan lewat https.
+const cookieLintasSitus = process.env.CROSS_SITE_COOKIE === "true";
+
 const refreshCookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "strict" as const,
+  secure: cookieLintasSitus || process.env.NODE_ENV === "production",
+  sameSite: cookieLintasSitus ? ("none" as const) : ("strict" as const),
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 hari
 };
 

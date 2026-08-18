@@ -11,10 +11,45 @@ import path from "path";
 
 const app: Application = express();
 
-// CORS configuration for credentials
-const corsOptions = {
+// Di belakang ngrok / proxy Vercel, alamat asli klien dan skema https ada di
+// header X-Forwarded-*. Tanpa ini req.protocol selalu terbaca "http".
+app.set("trust proxy", 1);
+
+// ----------------------------------------------------------------------------
+// CORS
+// FRONTEND_URL boleh berisi beberapa alamat dipisah koma, misalnya alamat
+// Vercel produksi sekaligus localhost saat pengembangan:
+//   FRONTEND_URL=http://localhost:5173,https://namaapp.vercel.app
+// Karena credentials:true, header Access-Control-Allow-Origin WAJIB berisi satu
+// origin persis (tidak boleh "*"), jadi origin pemanggil dipantulkan kembali.
+// ----------------------------------------------------------------------------
+const bersihkanOrigin = (nilai: string) => nilai.trim().replace(/\/+$/, "");
+
+const allowedOrigins = (process.env.FRONTEND_URL || "http://localhost:5173")
+  .split(",")
+  .map(bersihkanOrigin)
+  .filter(Boolean);
+
+// Setiap push ke Vercel membuat URL pratinjau dengan subdomain baru. Diaktifkan
+// lewat ALLOW_VERCEL_PREVIEW=true agar tidak terbuka begitu saja di produksi.
+const izinkanPreviewVercel = process.env.ALLOW_VERCEL_PREVIEW === "true";
+const polaVercel = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
+
+const corsOptions: cors.CorsOptions = {
   credentials: true,
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Permintaan tanpa Origin (curl, Postman, health check) tidak diblokir.
+    if (!origin) return callback(null, true);
+
+    const asal = bersihkanOrigin(origin);
+    if (allowedOrigins.includes(asal)) return callback(null, true);
+    if (izinkanPreviewVercel && polaVercel.test(asal)) return callback(null, true);
+
+    // Ditolak tanpa melempar galat: browser yang akan memblokir responsnya,
+    // sementara catatan ini memudahkan menelusuri origin yang belum terdaftar.
+    console.warn(`[cors] origin ditolak: ${origin} (terdaftar: ${allowedOrigins.join(", ")})`);
+    return callback(null, false);
+  },
 };
 
 app.use(cors(corsOptions));
